@@ -1,15 +1,16 @@
 # Quickstart and Validation Guide
 
-この文書は実装後の検証手順である。現在は設計段階で、package.jsonやアプリは未作成。
-以下のnpm script名を実装時の契約とし、実行していない試験を合格と記録しない。
+この文書はMVP全体の検証手順である。アプリの全5 storyと自動検証を実装済み。
+実機IME、初回利用者評価、基準端末、通常Chrome/Edgeの受け入れは未完了。
+以下のnpm script名は定義済みで、実行していない試験を合格と記録しない。
 データ規則は[data-model.md](data-model.md)、外部形式と操作は[contracts](contracts/)を参照する。
 
 ## Prerequisites
 
 - Windows 11、通常のChrome/Edgeプロファイル。日本語IMEを有効にする。
 - Node.js 22系22.12以上とnpm。初回依存導入・Playwrightブラウザ導入時だけネット接続が必要。
-- 実装時にpackage.json、package-lock.json、対応するconfigと下記scriptを作成する。
-  初回依存追加でlockfileを作り、それ以降はnpm ciを使用する。
+- package.json、package-lock.json、対応するconfigと下記scriptを作成済み。
+  依存の復元にはnpm ciを使用する。ローカルNodeとブラウザ配置はREADMEを参照。
 - 性能測定はplan.mdの基準端末で行う。OS/browser/CPU/RAMと実行日時を結果に残す。
 - テスト専用origin/profileを使い、利用者の保存データを検証準備で消さない。
 

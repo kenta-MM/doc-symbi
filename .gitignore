@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.tools/
+coverage/
+test-results/
+playwright-report/
+.test-profiles/
+.test-build/
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/

@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({ testDir: './tests', use: { baseURL: 'http://localhost:4173', headless: true, serviceWorkers: 'allow' }, webServer: { command: 'npm run build:test && npm run preview -- --outDir .test-build', url: 'http://localhost:4173', reuseExistingServer: false }, projects: [ { name: 'integration', testMatch: '**/integration/**/*.spec.ts' }, { name: 'e2e', testMatch: '**/e2e/**/*.spec.ts' }, { name: 'performance', testMatch: '**/performance/**/*.spec.ts', workers: 1 } ] });

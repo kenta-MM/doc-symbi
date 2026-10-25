@@ -13,5 +13,6 @@ playwright-report/
 Thumbs.db
 *.tmp
 *.swp
-.vscode/
+.vscode/*
+!.vscode/launch.json
 .idea/

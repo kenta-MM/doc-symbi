@@ -1,50 +1,151 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: 未制定（テンプレート） → 1.0.0
+- Modified principles: 未定義の原則を以下の10原則として初回制定
+  I. 人間とAIの共生 / II. 構造化ドキュメント / III. 意味と構造の整合性
+  IV. ローカルファースト / V. モジュール性と拡張性 / VI. コード品質
+  VII. テスト / VIII. ユーザー体験 / IX. 段階的な開発 / X. 将来の互換性
+- Added sections: アーキテクチャ上の制約、開発とレビューの手順、具体化したGovernance
+- Removed sections: なし（未定義の枠と例示コメントを置換）
+- Deferred TODOs: なし
+- 初回制定日: 2026-10-25（今回の原則定義に基づく）
+- 依存テンプレート・コマンドは変更しない。
+- このレポートはレビュー用の一時情報であり、コミット前に削除する。
+-->
+# DocSymbi Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. 人間とAIの共生
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+人間が直感的に読み書きでき、AIが構造と意味を解釈できるドキュメントを提供しなければ
+ならない（MUST）。人間向けの編集・表示と機械向けのデータアクセスは、同一のモデルに
+基づかなければならない（MUST）。意味の識別を見た目や画面座標だけに依存させては
+ならない（MUST NOT）。これにより、人間とAIの間で内容の解釈のずれを抑える。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. 構造化ドキュメント
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+明確に定義された拡張可能なドキュメントモデルを、唯一の正規データとして扱わなければ
+ならない（MUST）。モデルは要素の種類、属性、階層、関連性、メタデータとその制約を
+定義しなければならない（MUST）。構造と視覚的な表示を分離し、表示用データやエディタ
+固有の状態を独立した正規データにしてはならない（MUST NOT）。複数の表示や操作方法を
+追加しても、内容の基準を一つに保つためである。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. 意味と構造の整合性
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+編集、保存、読み込み、変換では、操作が意図して変更する部分を除き、意味、階層構造、
+関連性、メタデータを維持しなければならない（MUST）。データ境界でモデルの制約を検証し、
+不正なデータや未対応のモデル版を黙って受理・破棄してはならない（MUST NOT）。
+保存と再読み込みの往復では意味的な同等性を保証しなければならない（MUST）。
+変換先で情報を保持できない場合は、損失内容を明示し、元データを保持したうえで、
+利用者が明示的に選択した場合に限り変換を実行しなければならない（MUST）。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. ローカルファースト
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+基本的な作成、閲覧、編集、保存、再読み込みは、ネットワーク接続やクラウドアカウント
+なしで利用できなければならない（MUST）。利用者が所有データを取り出し、移動・復元
+できる保存方式と、その形式の説明を提供しなければならない（MUST）。クラウド連携は
+任意の追加機能として分離し、その停止でローカルの基本操作が利用不能になる設計に
+してはならない（MUST NOT）。外部送信を伴う機能は送信対象を示し、利用者の明示的な
+選択に基づかなければならない（MUST）。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. モジュール性と拡張性
+
+ドキュメントモデル、エディタ、レンダリング、データ保存、将来のAI連携の責務と境界を
+明確にしなければならない（MUST）。モデルの規則をUI、特定の保存サービス、AI提供者に
+依存させてはならない（MUST NOT）。モジュール間の入出力と依存方向を明示し、境界を
+越えて内部状態を書き換えてはならない（MUST NOT）。分離は責務と検証の容易さに基づき、
+初期段階から個別サービス化や汎用プラグイン基盤を要求するものではない。
+
+### VI. コード品質
+
+コードは責務を明確にし、意図が読み取れる命名と一貫した構成を採用しなければならない
+（MUST）。モデルとモジュール境界は明示的な型で表現し、外部入力には実行時検証も
+適用しなければならない（MUST）。型検査の回避が必要な場合は理由と検証方法を
+記録しなければならない（MUST）。抽象化や依存の追加は、現在の要件または実証された
+重複・変更課題で説明できなければならない（MUST）。推測上の将来要件だけを理由に
+複雑性を導入してはならない（MUST NOT）。
+
+### VII. テスト
+
+実装したドキュメント操作、シリアライズとデシリアライズ、データ整合性、主要な
+ユーザー操作には、自動テストを実装しなければならない（MUST）。テストは正常系に加え、
+不正データの扱い、保存・再読み込みの意味的同等性、構造・関連性・メタデータの保持を
+検証しなければならない（MUST）。主要なユーザー操作は、実際に利用するモジュールの
+連携を含めて検証しなければならない（MUST）。不具合修正では再現可能な回帰テストを
+追加し、変更に対応するテストと既存の関連テストの成功を確認しなければならない（MUST）。
+内部実装の写しではなく、利用者に約束する動作と不変条件を検証する。
+
+### VIII. ユーザー体験
+
+基本的な編集操作は、内部のデータ形式やAIの専門知識を要求せずに完了できなければ
+ならない（MUST）。高度な機能は必要な場面で利用できる形で提示し、基本操作の必須手順に
+してはならない（MUST NOT）。保存状態、処理失敗、データ損失の可能性は利用者が理解できる
+表現で示さなければならない（MUST）。主要な操作には具体的な受け入れシナリオを定め、
+操作の発見しやすさと完了までの流れを確認しなければならない（MUST）。
+
+### IX. 段階的な開発
+
+機能は、目的と受け入れ条件が明確で、それぞれ独立して検証できる小さな単位に
+分割しなければならない（MUST）。各単位で必要最小限の実装と検証を完了し、依存関係と
+未対応範囲を明示しなければならない（MUST）。性能最適化は計測結果または具体的な
+性能要件に基づかなければならない（MUST）。早すぎる最適化や推測による過剰設計を
+行ってはならない（MUST NOT）。
+
+### X. 将来の互換性
+
+重要な設計判断では、AIによる編集支援、ドキュメント間リンク、インポート・エクスポート、
+共同編集、OSS化への影響を確認し、既知の制約と将来の変更経路を記録しなければならない
+（MUST）。永続化形式の変更では既存データの読み込み可否と移行方針を明示しなければ
+ならない（MUST）。これらの将来機能は初期MVPの必須実装ではなく、将来性のためだけに
+未使用の機構を実装してはならない（MUST NOT）。ローカルデータの移植性は原則IVの
+現行要件であり、多様な外部形式への変換対応とは区別する。
+
+## アーキテクチャ上の制約
+
+- 正規モデルの定義、検証規則、永続化形式の版を明示し、表示上の変更だけで
+  ドキュメントの意味が変化しない設計にしなければならない（MUST）。
+- 重要な意思決定は、背景、選択肢、採用理由、影響、関連する憲章原則を含む
+  アーキテクチャ意思決定記録（ADR）としてリポジトリに残さなければならない（MUST）。
+  対象には正規モデル、保存形式、モジュール境界、主要技術、外部サービス依存の
+  選択・変更を含める。
+- 破壊的なモデル変更やデータ移行では、互換性の範囲、検証手順、失敗時の復旧方法を
+  実装前に記録しなければならない（MUST）。
+- 特定の言語、フレームワーク、クラウドサービスは本憲章では指定しない。
+  選定時には上記原則を満たす根拠をADRに記録しなければならない（MUST）。
+
+## 開発とレビューの手順
+
+1. 機能仕様に利用者の目的、対象範囲、対象外、受け入れ条件を記載しなければならない
+   （MUST）。将来構想と今回実装する要件を区別する。
+2. 実装計画でモデル、UI、保存、モジュール境界への影響と、10原則への適合を確認し、
+   検証可能なタスクに分割しなければならない（MUST）。
+3. 実装では対応する自動テストを整備し、採用した技術で利用可能な型検査・静的検査と
+   関連テストの結果を記録しなければならない（MUST）。未実施の検証とその理由も明示する。
+4. マージ前のレビューでは、受け入れ条件、データの保持、オフライン利用、責務分離、
+   必要なADRと憲章への適合を確認しなければならない（MUST）。不適合を未解決のまま
+   適合済みとして扱ってはならない（MUST NOT）。
+5. 正規モデル、保存形式、主要な操作、外部依存に関わる大きな変更では、実装前と
+   マージ前に原則との整合性を再確認し、その結果を計画またはレビューに残さなければ
+   ならない（MUST）。
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+本憲章はDocSymbiの仕様、計画、実装、レビューに対する判断基準とする。
+下位の文書や慣行と矛盾する場合は、本憲章に合わせて修正しなければならない（MUST）。
+MUSTは必須、MUST NOTは禁止を表す。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+改訂提案には、変更する条項、理由、既存の設計・データ・作業への影響、必要な移行方針を
+含めなければならない（MUST）。プロジェクトのメンテナーによるレビューと承認を経て、
+版と最終改訂日を更新しなければならない（MUST）。原則に反する変更を必要とする場合は、
+黙示的な例外を設けず、先に憲章の改訂を行わなければならない（MUST）。
+
+版はMAJOR.MINOR.PATCHに従う。原則の削除や互換性のない再定義はMAJOR、新原則・節の
+追加や指針の実質的な拡張はMINOR、意味を変えない明確化や誤記修正はPATCHを増やす。
+初回制定を1.0.0とし、制定日は保持する。
+
+すべての機能計画と変更レビューで適合を確認し、該当しない原則には理由を記録しなければ
+ならない（MUST）。憲章を改訂する際は、関連仕様や設計への影響を記録し、必要な追従作業を
+明示しなければならない（MUST）。
+
+**Version**: 1.0.0 | **Ratified**: 2026-10-25 | **Last Amended**: 2026-10-25

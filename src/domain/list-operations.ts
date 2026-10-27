@@ -27,7 +27,11 @@ function cleanLists(list: List): boolean {
 export function applyListCommand(document: Document, command: EditorCommand, environment: DocumentEnvironment): Document {
   let blocks: Block[] = structuredClone(document.blocks);
   const lists = blocks.filter((block): block is List => block.kind === 'list');
-  if (command.type === 'insertListItem') {
+  if (command.type === 'setListStyle') {
+    const list = findList(lists, command.listId);
+    if (!list) throw new Error('List not found');
+    list.style = command.style;
+  } else if (command.type === 'insertListItem') {
     const list = findList(lists, command.listId);
     if (!list || !Number.isInteger(command.index) || command.index < 0 || command.index > list.items.length) throw new Error('Invalid list insertion');
     list.items.splice(command.index, 0, structuredClone(command.item));

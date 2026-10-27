@@ -13,9 +13,11 @@ export function BlockToolbar({ document, execute, environment, applyHeading }: {
   const block = document.blocks.find(value => value.id === selected) ?? document.blocks[0]!;
   const index = document.blocks.indexOf(block);
   const items: { id: string; text: string; listId: string; index: number; depth: number }[] = [];
-  function collect(list: List, depth = 0) { list.items.forEach((item, index) => { items.push({ id: item.id, text: item.text, listId: list.id, index, depth }); item.children.forEach(child => collect(child, depth + 1)); }); }
+  const lists = new Map<string, List>();
+  function collect(list: List, depth = 0) { lists.set(list.id, list); list.items.forEach((item, index) => { items.push({ id: item.id, text: item.text, listId: list.id, index, depth }); item.children.forEach(child => collect(child, depth + 1)); }); }
   if (block.kind === 'list') collect(block);
   const item = items.find(value => value.id === selectedItem) ?? items[0];
+  const currentList = item ? lists.get(item.listId) : undefined;
   function add(kind: 'paragraph' | 'code' | 'bullet' | 'ordered') {
     const common = { id: environment.id(), metadata: {} };
     const next: Block = kind === 'bullet' || kind === 'ordered'
@@ -40,7 +42,12 @@ export function BlockToolbar({ document, execute, environment, applyHeading }: {
     </div>
     {block.kind === 'image' && <ImageInformation key={block.id} block={block} execute={execute} />}
     {block.kind === 'list' && <div className="tool-row"><label>項目 <select aria-label="操作対象項目" value={item?.id ?? ''} onChange={event => selectItem(event.target.value)}>{items.map((value, i) => <option key={value.id} value={value.id}>{i + 1}. {value.text || '空の項目'}</option>)}</select></label>
-      <button onClick={() => execute({ type: 'insertListItem', listId: block.id, index: block.items.length, item: { id: environment.id(), metadata: {}, text: '', children: [] } })}>項目追加</button>
+      {currentList && <label>リストの種類 <select aria-label="選択項目のリスト種類" value={currentList.style} onChange={event => execute({ type: 'setListStyle', listId: currentList.id, style: event.target.value === 'ordered' ? 'ordered' : 'bullet' })}><option value="bullet">箇条書き</option><option value="ordered">番号付きリスト</option></select></label>}
+      <button onClick={() => {
+        const id = environment.id();
+        execute({ type: 'insertListItem', listId: currentList?.id ?? block.id, index: currentList?.items.length ?? block.items.length, item: { id, metadata: {}, text: '', children: [] } });
+        selectItem(id);
+      }}>項目追加</button>
       {item && <><button disabled={item.index === 0} onClick={() => execute({ type: 'indentListItem', id: item.id })}>字下げ</button><button disabled={item.depth === 0} onClick={() => execute({ type: 'outdentListItem', id: item.id })}>字下げ解除</button><button onClick={() => execute({ type: 'deleteListItem', id: item.id })}>項目削除</button></>}
     </div>}
   </div>;

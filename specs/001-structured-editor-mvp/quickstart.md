@@ -39,8 +39,8 @@ npm run test:performance
 | test:unit | Vitest run: domain/applicationの純粋操作と失敗状態 |
 | test:contract | Vitest run: codec/adapter往復と不正データ |
 | build | Vite production build + Workboxの資産manifest/SW生成 |
-| test:integration | Playwright: 実IndexedDBとeditorの契約。prod previewを固定originで起動 |
-| test:e2e | Playwright: 全USとoffline再起動。SWをblockしないproduction設定 |
+| test:integration | Playwright: FileDocumentRepository/旧IndexedDBとeditorの契約。prod previewを固定originで起動 |
+| test:e2e | Playwright: e2e/e2e-offline両構成で全US、別試験でcold startとSW更新 |
 | test:performance | Playwright: 基準fixtureで20回を計測し生値と達成件数を出力 |
 | dev | Vite開発サーバー。オフライン検証の代用にしない |
 | preview | distをlocalhost:4173、strictPortで配信 |
@@ -48,6 +48,19 @@ npm run test:performance
 開発表示は`npm run dev`、手動受け入れは`npm run build`後に
 `npm run preview -- --host localhost --port 4173 --strictPort`。
 利用準備完了が表示されるまで待ってからオフライン試験を開始する。
+
+初回は「保存フォルダーを選択」で検証専用の空フォルダーを指定する。記事は1文書1個の
+`.docsymbi.json` として保存される。ハンドルの許可を再要求するときは「保存先に再接続」を使う。
+移動・削除されたフォルダーは選び直す。origin/profileごとに保存先を選択する。
+旧ブラウザ内の記事は「ブラウザ内の記事をコピー」で元を残して移行する。
+通常importは同じIDを拒否する。「現在の文書をファイルで更新」は対象IDを確認した明示的更新である。
+v1を読み込み可能なまま、画像はv2の正規形式で保存する。詳細はdocument-format契約を参照。
+
+見出しは選択範囲、未選択ならカーソル行へ適用する。階層ごとのリスト種類も画面で変更できる。
+Undo/RedoはCtrl+Z/Y/Shift+Zのみ。履歴なしの操作では理由を表示する。
+閲覧中は上部タイトル入力と保存済みボタンを隠し、保存状態は文字で示す。
+編集終了は保存操作ではない。未確定の文書名も未保存保護に含まれる。
+同じIDの明示的再読込は本文と履歴を初期化し、通常保存・閲覧切替では履歴を維持する。
 
 ## Automated acceptance scenarios
 
@@ -63,7 +76,7 @@ npm run test:performance
 
 UIで新規→入力→保存→再起動→名前変更→保存→再起動→削除キャンセル→削除確定を行う。
 同名の2文書でも対象以外が変化しないことをexport結果で確認する。
-容量不足/abort/書込不可をrepository境界で注入し、実DBの前回レコードと現在編集を比較する。
+容量不足/abort/書込不可をrepository境界で注入し、前回保存ファイルと現在編集を比較する。
 同じrevisionから2つの独立ページでsaveし、成功は1件、残りはConflictであること。
 別ページによるdelete後に古いsaveをしてNotFoundとなり、復活しないこと。
 保存中に追加入力し、完了後もdirtyが残り、次の保存で新revisionを使うこと。
@@ -109,7 +122,7 @@ production build、1つのアプリページ、拡張機能なしで20回ずつ�
 - Ctrl+S/Z/Y/Shift+Z、ボタン操作、未保存での文書切替とタブ終了、削除キャンセルを確認する。
 - SC-002: 初回利用5人に同じ作成→各種ブロック→保存→再読込課題を渡し口頭支援しない。
   各人の所要時間、完了、分かりやすさ1〜5を記録。4人以上が10分以内かつ評価4以上。
-- persist拒否と許可の両状態で保存・取り出しを確認。拒否を保存失敗と混同しない。
+- 実フォルダー選択、権限失効・再接続、書込拒否からの再試行を確認する。persistは旧IndexedDB方式だけが対象で、フォルダー保存の許可とは区別する。
 - 基準ChromeとEdge両方で主要操作とcold startを確認。正確な版と環境を記録する。
 
 ## Exit criteria

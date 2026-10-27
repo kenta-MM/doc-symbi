@@ -8,7 +8,7 @@
 
 独自の版付きドキュメントモデルを正規データとする、ローカルファーストのデスクトップPWAを作る。
 TypeScript strict + ZodのドメインをReact/Tiptapから分離し、明示的な双方向adapterで編集基盤へ接続する。
-IndexedDBはrepository経由で原子的に保存する。本文の構造とmetadataを保持した往復、
+選択フォルダーへrepository経由で保存し、旧IndexedDBはコピー元として保持する。本文の構造とmetadataを保持した往復、
 基本的なビジュアル編集、保存失敗と競合の保護を先に完成させる。
 本計画はPhase 1まで。アプリ実装、依存導入、tasks.mdの生成は含まない。
 
@@ -20,8 +20,9 @@ ES2022。開発Node.jsは22系22.12以上。実装開始時に互換性を確認
 **Primary Dependencies**: React、Vite、Tiptap 3系 / ProseMirror、Zod 4系。
 Workbox build/precachingでPWA資産を管理。Tiptapは必要なnodeとUndoRedoのみを明示登録。
 
-**Storage**: IndexedDB database `docsymbi`。DocumentRepositoryを介した全文レコードとrevision CAS。
-独自UTF-8 JSON（schemaVersion=1）の取り出し・読み込みを提供。
+**Storage**: File System Accessの選択フォルダー、1記事1JSON。不透明なrevisionで比較し同一originのWeb Locksで直列化する。
+旧 `docsymbi` DBはコピー元、`docsymbi-folder` DBはハンドル記憶。独自UTF-8 JSON（schemaVersion=1/2）の取り出し・読み込みを提供する。
+外部アプリ/別originとの厳密な排他は対象外（ADR-007）。
 
 **Testing**: Vitestでdomain/application/adapterの単体・契約試験、Playwrightで実IndexedDB統合とE2E。
 日本語IMEと初心者5名のUX評価は手動検証を併用。
@@ -39,7 +40,7 @@ Workbox build/precachingでPWA資産を管理。Tiptapは必要なnodeとUndoRed
 **Constraints**: オフライン準備後にサーバー停止でも再起動可能。文書の外部送信なし。
 未知版・未知構造は拒否。編集状態と最後の正常保存を失敗時に保護。形式版とDB版を分離。
 
-**Scale/Scope**: 単一利用者、5種類のブロック、見出し6段階、混在入れ子リスト、100履歴イベント。
+**Scale/Scope**: 単一利用者、従来5種類と画像ブロック、見出し6段階、混在入れ子リスト、100履歴イベント。
 最低20fixtureを10往復。性能保証範囲と入力安全上限はdata-model.mdで区別する。
 
 ## Constitution Check
@@ -50,9 +51,9 @@ Phase 1後: 下表すべて設計適合。これは動作試験の合格を示�
 | 原則 | 設計証拠・検証 | Gate |
 | --- | --- | --- |
 | I 人間とAIの共生 | ビジュアル操作と独自JSON; editor/format契約、SC-002/004 | PASS |
-| II 構造化ドキュメント | schemaVersion=1、内部JSON直接保存禁止、ADR-002/003 | PASS |
+| II 構造化ドキュメント | schemaVersion=1/2、内部JSON直接保存禁止、ADR-002/003/008 | 設計適合 |
 | III 意味と構造の整合性 | ID/metadata規則、全往復と失敗時不変性、SC-001/007 | PASS |
-| IV ローカルファースト | IndexedDB + SW + 取り出し/復元、SC-003/004 | PASS |
+| IV ローカルファースト | 選択フォルダー + SW + 旧DBコピー + 取り出し/復元、ADR-007 | 設計適合 |
 | V モジュール性 | domain/application/editor/infrastructure/uiの依存方向 | PASS |
 | VI コード品質 | strict、Zod、境界import制限、単一プロジェクト | PASS |
 | VII テスト | Vitest/Playwrightと実IME、各FRとの対応をquickstartに記載 | PASS |
@@ -60,9 +61,9 @@ Phase 1後: 下表すべて設計適合。これは動作試験の合格を示�
 | IX 段階的開発 | 下記実装順序、性能は計測後に最適化 | PASS |
 | X 将来互換性 | 独自形式版、repository port、ADRの将来影響記録 | PASS |
 
-重要な判断はresearch.mdのADR-001〜006に記録済み。各ADRに理由、代替、トレードオフ、
+重要な判断はresearch.mdのADR-001〜010に記録済み。007〜010が保存先・形式・UIの旧決定に優先する。各ADRに理由、代替、トレードオフ、
 リスク、テスト方針を記載。構造・データ・依存を大きく変える際は再レビューする。
-例外・原則違反・未解決の技術確認事項はない。
+2026-10-27に既存変更への追従レビューを記録した。実機IME・通常ブラウザ・指定基準端末・利用者評価は未受け入れ。
 
 ## Project Structure
 

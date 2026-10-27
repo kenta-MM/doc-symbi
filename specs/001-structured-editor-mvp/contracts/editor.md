@@ -19,7 +19,7 @@ composition rootだけが具象を組み合わせる。domainはTypeScript/Zod�
 | listItem | listItem(paragraph, list*) | item id/metadataをattrs; 先頭paragraphはitem.textの表現のみ |
 
 listItemの内部paragraphには独立した正規IDを与えない。段落を複数含むlistItem、marks、
-画像、表、リンク属性、任意の未対応nodeを受理しない。unsupported入力を黙ってflattenしない。
+表、リンク属性、任意の未対応nodeを受理しない。画像はv2のトップレベルimageBlockのみ対応する。unsupported入力を黙ってflattenしない。
 標準extensionは上記形状へ制限し、キーボード操作も同じ形状を維持する。
 
 - `toEditor(document) → editor body + envelope`、`fromEditor(body, envelope) → Document | AdapterError`。
@@ -30,7 +30,7 @@ listItemの内部paragraphには独立した正規IDを与えない。段落を�
 
 ## Transaction flow
 
-1. 初回load時に正規Documentを検証しeditorへ渡す。文書を切り替える場合のみeditor/historyを再作成。
+1. 明示load時に正規Documentを検証しeditorへ渡し、同じIDでもeditor/historyを再作成。保存/通常入力/モード切替では再作成しない。
 2. 入力transactionを候補として受け、ID割当・保持を明示した規則で行い、候補bodyをdecodeする。
 3. 純粋なacceptBodyChangeで構造・一意ID・制約を検証してから受理する。不正ならtransactionを
    拒否し、直前の正常な編集状態を保持して理由を示す。reject後のhistoryにも不正候補を残さない。
@@ -57,13 +57,13 @@ selection、history、IME合成中の状態は内部状態とし永続化しな�
 - 新規、名前変更、削除、保存、正規形式の取り出し/読み込みを名前付きボタンまたはメニューで提供。
   同名文書は更新日時と短縮IDを併記する。
 - ブロック追加・種類選択・上下移動・削除、見出し1〜6、リスト字下げ/解除をマークアップなしで操作可能。
-- Undo/RedoはボタンとCtrl+Z/Ctrl+Y/Ctrl+Shift+Z、保存はCtrl+S。対象なしの操作はdisabled。
+- Undo/RedoはCtrl+Z/Ctrl+Y/Ctrl+Shift+Zのみ、ボタンは置かない。対象なしの操作は無変更とし文章で案内する。保存はCtrl+S。
 - 保存状態は未保存/保存中/保存済み/保存失敗を表示。容量不足や競合では再試行/取り出しを選べる。
 - アプリ内移動は保存/破棄/キャンセル。ブラウザ終了はdirty時のbeforeunload標準警告。
 - 削除確認に名前と識別情報を表示。未保存文書の削除も確認し、キャンセル時は本文を保持。
 - アウトラインは見出しIDで移動し、空見出しを「無題の見出し」と仮表示。仮表示を本文へ書き込まない。
 - plain text貼り付けでHTML装飾を取り込まない。コードを実行せず、本文をinnerHTMLとして挿入しない。
-- 通常の保存とデータ取り出しは区別する。persist許可の有無を知らせ、未許可でも利用を妨げない。
+- 通常の保存とデータ取り出しは区別する。主保存先は選択フォルダーでpersistを保存成功条件にしない。旧DB利用時のみpersist許可の有無を知らせる（ADR-007）。
 - 更新版SWは未保存の編集を強制再読み込みしない。保存/破棄後の利用者操作で更新する。
 
 ## Verification

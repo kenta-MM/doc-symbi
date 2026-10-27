@@ -32,6 +32,7 @@ export function FileTransfer({ session, navigate, refreshed, report, editable, l
           const stored = update && initial.document && initial.baseRevision !== null
             ? await updateDocumentFromFile(text, session.repository, initial.document.id, initial.baseRevision)
             : await importDocument(text, session.repository);
+          if (!session.isCurrent(initial)) throw new Error('ファイルは保存しましたが、待機中の編集を保持するため表示の切り替えを中止しました');
           session.close(); await session.load(stored.document.id); loaded(); await refreshed();
         } catch (error) { report(error); }
       });

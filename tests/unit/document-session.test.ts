@@ -64,3 +64,40 @@ test('automatic resume never overwrites a draft created while the read is pendin
   expect(session.state.document!.title).toBe('new draft');
   expect(session.state.dirty).toBe(true);
 });
+
+test('manual load rejects edits made while reading and latest load wins', async () => {
+  const repository = new MemoryRepository();
+  const session = new DocumentSession(repository, { id: fixedIds(), clock: () => fixedTime });
+  session.create('saved'); await session.save();
+  const stored = await repository.get(session.state.document!.id);
+  const releases: ((value: typeof stored) => void)[] = [];
+  repository.get = () => new Promise(resolve => releases.push(resolve));
+  const loading = session.load(stored.document.id);
+  await Promise.resolve(); session.rename('keep this edit');
+  releases[0]!(stored);
+  await expect(loading).rejects.toThrow('変更');
+  expect(session.state.document!.title).toBe('keep this edit');
+  const first = session.load(stored.document.id);
+  await Promise.resolve();
+  const second = session.load(stored.document.id);
+  await Promise.resolve();
+  releases[2]!({ ...stored, document: { ...stored.document, title: 'latest request' } });
+  await second;
+  releases[1]!(stored); await first;
+  expect(session.state.document!.title).toBe('latest request');
+});
+
+test('uncommitted title is dirty and is included in saves and asynchronous guards', async () => {
+  const repository = new MemoryRepository();
+  const session = new DocumentSession(repository, { id: fixedIds(), clock: () => fixedTime });
+  session.create('title'); await session.save();
+  session.setTitleDraft('draft title');
+  expect(session.state.dirty).toBe(true);
+  expect(session.state.document!.title).toBe('title');
+  await session.save();
+  expect((await repository.get(session.state.document!.id)).document.title).toBe('draft title');
+  session.setTitleDraft('   ');
+  await expect(session.save()).rejects.toThrow();
+  expect(session.state.document!.title).toBe('draft title');
+  expect(session.state.dirty).toBe(true);
+});

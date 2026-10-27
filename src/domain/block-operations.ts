@@ -3,6 +3,7 @@ import type { EditorCommand } from './commands';
 import { editedDocument, type DocumentEnvironment } from './document';
 import { equivalent } from './equivalence';
 import { assertTextOffset } from './text';
+import { applyHeadingSelection } from './heading-operations';
 
 function requireIndex(index: number, maximum: number): void {
   if (!Number.isInteger(index) || index < 0 || index > maximum) throw new RangeError('Invalid block index');
@@ -15,6 +16,7 @@ function replaceListText(list: List, id: string, text: string): boolean {
   return false;
 }
 export function applyCommand(document: Document, command: EditorCommand, environment: DocumentEnvironment): Document {
+  if (command.type === 'applyHeading') return applyHeadingSelection(document, command, environment);
   const blocks: Block[] = structuredClone(document.blocks);
   const index = 'id' in command ? blocks.findIndex(block => block.id === command.id) : -1;
   const block = blocks[index];

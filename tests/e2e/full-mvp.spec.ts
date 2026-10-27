@@ -38,11 +38,16 @@ test('all stories work offline and portable data restores into an isolated empty
     expect(JSON.parse(await readFile(secondPath, 'utf8'))).toEqual(JSON.parse(exported.toString()));
   } finally { await other.close(); }
 });
-test('all 24 fixtures export and restore with every field intact in a separate browser context', async ({ page, browser }) => {
+test('all 24 fixtures export and restore with every field intact in a separate browser context', async ({ page, browser }, testInfo) => {
   test.setTimeout(120000);
   await page.goto('/');
   const isolated = await browser.newContext({ serviceWorkers: 'allow' });
   const target = await isolated.newPage(); await prepareFolder(target);
+  if (testInfo.project.name === 'e2e-offline') {
+    await expect(target.getByText('オフライン利用の準備完了', { exact: true })).toBeVisible();
+    await isolated.setOffline(true);
+    await target.reload();
+  }
   try {
     for (const document of documents) {
       await page.getByLabel('文書を読み込む').setInputFiles({ name: 'source.docsymbi.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(document)) });

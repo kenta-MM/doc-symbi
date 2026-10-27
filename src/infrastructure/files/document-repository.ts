@@ -4,6 +4,7 @@ import { RepositoryError } from '../../application/errors';
 import type { Document } from '../../domain/schema';
 import { deserialize, serialize } from '../../domain/codec';
 import { limits } from '../../domain/validate';
+import { fileRepositoryError } from './errors';
 
 export interface Directory extends FileSystemDirectoryHandle {
   values(): AsyncIterableIterator<FileSystemFileHandle | Directory>;
@@ -51,6 +52,9 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
   private restoring: Promise<void> | null = null;
   warning: string | null = null;
   constructor(private readonly legacy?: DocumentRepository) {}
+  private async operation<T>(action: () => Promise<T>, id?: string): Promise<T> {
+    try { return await action(); } catch (error) { throw fileRepositoryError(error, id); }
+  }
   get name() { return this.directory?.name ?? null; }
   get supported() { return typeof (window as PickerWindow).showDirectoryPicker === 'function'; }
   async restore(): Promise<void> {
@@ -94,25 +98,33 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
       if (handle.kind !== 'file' || !handle.name.endsWith(suffix)) continue;
       try {
         const file = await handle.getFile();
-        if (file.size > limits.fileBytes) throw new Error('ファイルは10 MiB以内にしてください');
+        if (file.size > limits.fileBytes) throw new RepositoryError('ValidationFailed', 'ファイルは10 MiB以内にしてください');
         const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
         const document = deserialize(text);
-        if (entries.has(document.id)) throw new Error('記事IDが重複しています');
+        if (entries.has(document.id)) throw new RepositoryError('ValidationFailed', '記事IDが重複しています', document.id);
         entries.set(document.id, { document, revision: await revision(text), name: handle.name });
-      } catch (error) { throw new Error(`${handle.name}: ${error instanceof Error ? error.message : '読み込み失敗'}`, { cause: error }); }
+      } catch (error) {
+        const failure = fileRepositoryError(error);
+        const code = error instanceof TypeError ? 'ValidationFailed' : failure.code;
+        throw new RepositoryError(code, `${handle.name}: ${failure.message}`, failure.documentId, { cause: error });
+      }
     }
     return entries;
   }
   async list() {
+    return this.operation(async () => {
     await this.restore();
     if (!this.directory) return [];
     return [...(await this.scan()).values()].map(({ document, revision }) => ({ id: document.id, title: document.title, updatedAt: document.updatedAt, revision }))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
+    });
   }
   async get(id: string): Promise<StoredDocument> {
+    return this.operation(async () => {
     const item = (await this.scan()).get(id);
     if (!item) throw new RepositoryError('NotFound', '記事ファイルが見つかりません', id);
     return { document: item.document, revision: item.revision };
+    }, id);
   }
   private async write(document: Document, expected?: number): Promise<StoredDocument> {
     const text = serialize(document);
@@ -144,15 +156,15 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
       return { document: deserialize(text), revision: await revision(text) };
     });
   }
-  create(document: Document) { return this.write(document); }
-  save(document: Document, expectedRevision: number) { return this.write(document, expectedRevision); }
+  create(document: Document) { return this.operation(() => this.write(document), document.id); }
+  save(document: Document, expectedRevision: number) { return this.operation(() => this.write(document, expectedRevision), document.id); }
   async delete(id: string, expectedRevision: number) {
-    await navigator.locks.request('docsymbi-file-write', async () => {
+    await this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
       const item = (await this.scan()).get(id);
       if (!item) throw new RepositoryError('NotFound', '記事ファイルが見つかりません');
       if (item.revision !== expectedRevision) throw new RepositoryError('Conflict', 'ファイルが外部で変更されています');
       await (await this.root()).removeEntry(item.name);
-    });
+    }), id);
   }
   async migrate() {
     let count = 0;

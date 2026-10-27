@@ -82,7 +82,11 @@ export class EditorController implements EditorPort {
     this.editor?.setEditable(editable, false);
     this.editor?.view.dom.setAttribute('aria-readonly', String(!editable));
   }
-  applyHeading(): void { if (this.editor?.isEditable) applyHeading(this.editor); }
+  applyHeading(): void {
+    if (!this.editor?.isEditable) return;
+    try { applyHeading(this.editor, this.current(), this.environment); }
+    catch (error) { this.onError(error instanceof Error ? error : new Error('見出しを適用できません')); }
+  }
   undo(): void { if (this.editor?.isEditable) this.editor.commands.undo(); }
   redo(): void { if (this.editor?.isEditable) this.editor.commands.redo(); }
   get canUndo(): boolean { return this.editor?.can().undo() ?? false; }

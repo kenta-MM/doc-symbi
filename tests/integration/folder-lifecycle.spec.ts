@@ -46,7 +46,8 @@ test('a new repository restores the selected folder before saving without UI ini
   expect(result.documents).toHaveLength(1);
   await page.goto('/');
   await page.locator('.document-link').click();
-  await expect(page.getByRole('status')).toContainText('保存済み');
+  await expect(page.locator('.tiptap')).toHaveAttribute('contenteditable', 'false');
+  await expect(page.locator('.document-link.active')).toContainText(fixtureDocument().title);
 });
 
 test('reinitialization does not clear an active folder selection when remembered data is absent', async ({ page }) => {

@@ -4,6 +4,7 @@ import { validateDocument } from '../../src/domain/validate';
 import { documents } from '../fixtures/documents';
 import { fixedIds, fixedTime } from './deterministic';
 import { IndexedDbRepository } from '../../src/infrastructure/indexeddb/document-repository';
+import { FileDocumentRepository } from '../../src/infrastructure/files/document-repository';
 import { equivalent } from '../../src/domain/equivalence';
 
 export function createEditorTest(index = 1) {
@@ -23,8 +24,8 @@ export function createEditorTest(index = 1) {
     dispose: () => { editor.dispose(); host.remove(); },
   };
 }
-export async function checkEditSaveRoundTrips() {
-  const repository = new IndexedDbRepository();
+export async function checkEditSaveRoundTrips(storage: 'indexeddb' | 'files' = 'indexeddb') {
+  const repository = storage === 'files' ? new FileDocumentRepository() : new IndexedDbRepository();
   let completed = 0;
   for (let index = 0; index < documents.length; index++) {
     const editor = createEditorTest(index);
@@ -40,5 +41,6 @@ export async function checkEditSaveRoundTrips() {
     }
     await repository.delete(stored.document.id, stored.revision); editor.dispose();
   }
-  repository.close(); return completed;
+  if (repository instanceof IndexedDbRepository) repository.close();
+  return completed;
 }

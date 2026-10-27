@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../helpers/folder-page';
 import { writeFile } from 'node:fs/promises';
 import { cpus, totalmem, version, release } from 'node:os';
 import { performanceDocument } from '../fixtures/performance-document';
@@ -8,15 +8,20 @@ test('20 raw measurements of 1000-block / 100000-character editing', async ({ pa
   const document = performanceDocument();
   await page.goto('/');
   await page.getByLabel('文書を読み込む').setInputFiles({ name: 'performance.docsymbi.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(document)) });
-  await expect(page.getByRole('textbox', { name: '文書名' })).toHaveValue(document.title);
+  await expect(page.locator('.document-link.active')).toContainText(document.title);
   await expect(page.locator('.document-link')).toBeVisible();
+  const small = { ...document, id: crypto.randomUUID(), title: '計測準備用文書', blocks: [document.blocks[0]!] };
+  await page.getByLabel('文書を読み込む').setInputFiles({ name: 'small.docsymbi.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(small)) });
+  await expect(page.locator('.document-link.active')).toContainText(small.title);
   page.on('dialog', dialog => dialog.accept());
   const rows: { run: number; display: number; navigation: number; input: number }[] = [];
   const now = () => page.evaluate(() => performance.now());
   const painted = () => page.evaluate(() => new Promise<number>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now())))));
   for (let run = 1; run <= 20; run++) {
-    await page.reload(); await expect(page.locator('.document-link')).toBeVisible();
-    const start = await now(); await page.locator('.document-link').click();
+    await page.reload();
+    await page.locator('.document-link').filter({ hasText: small.title }).click();
+    await expect(page.locator('.tiptap > *')).toHaveCount(1);
+    const start = await now(); await page.locator('.document-link').filter({ hasText: document.title }).click();
     await expect(page.locator('.tiptap > *')).toHaveCount(1000);
     const display = await painted() - start;
     await page.getByRole('button', { name: '編集', exact: true }).click();

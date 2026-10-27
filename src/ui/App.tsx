@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { DocumentSession } from '../application/document-session';
 import type { DocumentSummary } from '../application/ports/document-repository';
 import type { EditorPort, EditorCommand } from '../application/ports/editor';
@@ -23,8 +23,10 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [editor, setEditor] = useState<EditorPort | null>(null);
   const [error, setError] = useState('');
-  const [title, setTitle] = useState('');
+  const title = state.draftTitle ?? state.document?.title ?? '';
+  const setTitle = (value: string) => session.setTitleDraft(value);
   const [pending, setPending] = useState<(() => void | Promise<void>) | null>(null);
+  const navigationRequest = useRef(0);
   const [deleting, setDeleting] = useState(false);
   const [folder, setFolder] = useState<string | null>(null);
   const [storageReady, setStorageReady] = useState(!storage);
@@ -47,7 +49,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     if (target) { setEditingId(null); await session.load(target.id, initial); }
   }, [session, storage]);
   const report = useCallback((error: unknown) => setError(error instanceof Error ? error.message : '操作を完了できません'), []);
-  const save = useCallback(async () => { try { if (session.state.document && title !== session.state.document.title) session.rename(title); await session.save(); await refresh(); setError(''); } catch (error) { report(error); } }, [session, title, refresh, report]);
+  const save = useCallback(async () => { try { await session.save(); await refresh(); setError(''); } catch (error) { report(error); } }, [session, refresh, report]);
   useEffect(() => {
     void (async () => {
       try { await storage?.restore(); setFolder(storage?.name ?? null); await resume(); }
@@ -64,15 +66,21 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     window.addEventListener('editor-error', rejected);
     return () => window.removeEventListener('editor-error', rejected);
   }, [report]);
-  useEffect(() => { setTitle(state.document?.title ?? ''); }, [state.document?.title]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); if (state.document) void save(); } };
     window.addEventListener('keydown', key);
     return () => { window.removeEventListener('keydown', key); };
   }, [state.dirty, state.saveState, state.document, save]);
   function navigate(action: () => void | Promise<void>) {
-    if (requiresNavigationGuard(state)) setPending(() => action);
-    else void Promise.resolve().then(action).catch(report);
+    navigationRequest.current++;
+    if (requiresNavigationGuard(session.state)) setPending(() => action);
+    else {
+      const initial = session.state;
+      void Promise.resolve().then(() => {
+        if (!session.isCurrent(initial)) throw new Error('文書が変更されたため移動を中止しました');
+        return action();
+      }).catch(report);
+    }
   }
   function execute(command: EditorCommand) { try { if (!editable) return; editor?.execute(command, session.environment); setError(''); } catch (error) { report(error); } }
   async function chooseFolder() {
@@ -114,22 +122,28 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     {storage && !storage.supported && <p className="storage-warning">フォルダー保存にはデスクトップ版ChromeまたはEdgeを使用してください。</p>}
     {notice && <p className="storage-warning" role="status">{notice}</p>}
     {storage?.warning && <p className="storage-warning" role="note">{storage.warning}</p>}
-    <div className="workspace"><DocumentList documents={documents} activeId={state.document?.id} open={id => navigate(async () => { await session.load(id); setEditingId(null); })} storageLabel={storage ? (folder ? `保存先: ${folder}` : '保存フォルダー未選択') : 'このブラウザに保存'} /><main className="document-main">
+    <div className="workspace"><DocumentList documents={documents} activeId={state.document?.id} open={id => navigate(async () => { if (await session.load(id)) setEditingId(null); })} storageLabel={storage ? (folder ? `保存先: ${folder}` : '保存フォルダー未選択') : 'このブラウザに保存'} /><main className="document-main">
       {(error || state.error) && <div role="alert" className="error-banner">{error || state.error?.message}{state.document && state.saveState === 'error' && <button onClick={() => void save()}>保存を再試行</button>}</div>}
       {!state.document ? <div className="welcome"><span className="eyebrow">YOUR LOCAL WORKSPACE</span><h2>考えを、構造に。</h2><p>文書を選ぶか、新しい文書を作成してください。</p><p className="muted">{storage ? '選択したフォルダーに、1記事1ファイルで保存します。' : '文書はこのブラウザ内に保存されます。'}</p></div> : <>
         <div className="editing-layout"><div className="document-canvas">
           {editable && <HistoryToolbar editor={editor} />}
           {editable && <BlockToolbar key={state.document.id} document={state.document} execute={execute} environment={session.environment} applyHeading={() => editor?.applyHeading()} />}
-          <EditorPane editable={editable} document={state.document} createEditor={createEditor} connect={connect} />
+          <EditorPane key={state.loadVersion} editable={editable} document={state.document} createEditor={createEditor} connect={connect} />
         </div><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></div>
       </>}
     </main></div>
     <footer className="app-footer"><FileTransfer editable={editable} loaded={() => setEditingId(null)} session={session} navigate={navigate} refreshed={refresh} report={report} />{!storage && <StorageStatus />}<OfflineStatus updateSafely={update => navigate(() => { session.close(); update(); })} /></footer>
     {help && <DocumentDialog label="使い方"><h2>DocSymbiの使い方</h2><p>左の一覧で文書を選び、右のアウトラインから読みたい節に移動できます。文書名の検索と並び替えも使えます。</p><p>「編集」で本文や文書名を変更し、「保存」で保存します。「編集を終了」は閲覧への切り替えで、自動保存はしません。</p><p>保存先へのアクセス許可を求められたときは「保存先に再接続」を選んでください。接続後は前回の記事を自動で開きます。</p><button onClick={() => setHelp(false)}>閉じる</button></DocumentDialog>}
     {pending && <DocumentDialog label="未保存の変更"><h2>変更を保存しますか？</h2><p>移動前に、編集中の文書の扱いを選んでください。</p>
-      <button onClick={() => setPending(null)}>キャンセル</button>
+      <button onClick={() => { navigationRequest.current++; setPending(null); }}>キャンセル</button>
       <button disabled={state.saveState === 'saving'} onClick={() => { const action = pending; setPending(null); void Promise.resolve().then(action).catch(report); }}>破棄して移動</button>
-      <button className="primary" onClick={() => { void resolveNavigation('save', session, async () => { await refresh(); const action = pending; setPending(null); await action(); }).catch(report); }}>保存して移動</button>
+      <button className="primary" disabled={state.saveState === 'saving'} onClick={() => { const request = navigationRequest.current; void resolveNavigation('save', session, async () => {
+        const saved = session.state;
+        await refresh();
+        if (request !== navigationRequest.current) return;
+        if (!session.isCurrent(saved) || requiresNavigationGuard(session.state)) throw new Error('文書が変更されました。もう一度保存してから移動してください');
+        const action = pending; setPending(null); await action();
+      }).catch(report); }}>保存して移動</button>
     </DocumentDialog>}
     {deleting && state.document && <DocumentDialog label="文書の削除"><h2>「{state.document.title}」を削除しますか？</h2><p>{state.document.id}</p><p>{storage ? '保存先の記事ファイルと未保存の変更を削除します。この操作は元に戻せません。' : '未保存の変更も削除されます。'}</p><button onClick={() => setDeleting(false)}>キャンセル</button><button onClick={() => {
 

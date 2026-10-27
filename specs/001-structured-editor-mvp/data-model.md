@@ -1,4 +1,4 @@
-# Data Model: DocSymbi v1
+# Data Model: DocSymbi v1 / v2
 
 正規モデルはsrc/domainに置く。React、Tiptap、ProseMirror、IndexedDBをimportしない。
 Zod strict schemaから型を導出する。以下は保存・変換・操作の規範である。
@@ -7,14 +7,14 @@ Zod strict schemaから型を導出する。以下は保存・変換・操作の
 
 | Entity | Fields | Constraints / relationships |
 | --- | --- | --- |
-| Document | format, schemaVersion, id, title, createdAt, updatedAt, metadata, blocks | format=`docsymbi`; schemaVersion=1; blocksは1個以上 |
+| Document | format, schemaVersion, id, title, createdAt, updatedAt, metadata, blocks | format=`docsymbi`; schemaVersion=1/2; blocksは1個以上 |
 | Paragraph | kind, id, metadata, text | kind=`paragraph`; textは空文字も可 |
 | Heading | kind, id, metadata, text, level | kind=`heading`; levelは整数1〜6 |
 | CodeBlock | kind, id, metadata, text | kind=`code`; 空白・改行をそのまま保持; 実行不可 |
 | List | kind, id, metadata, style, items | kind=`list`; style=`bullet`または`ordered`; itemsは1個以上 |
 | ListItem | id, metadata, text, children | childrenは0個以上のList; 任意の混在・入れ子 |
 | StoredDocument | document, revision | repository内部のみ; revisionは正整数、exportしない |
-| EditorSession | document, baseRevision, savedSnapshot, generation, saveState | applicationの揮発状態; 履歴とselectionはeditor adapterが保持 |
+| EditorSession | document, baseRevision, savedSnapshot, generation, loadVersion, draftTitle, saveState | applicationの揮発状態; 履歴とselectionはeditor adapterが保持 |
 | OutlineEntry | headingId, label, level, parentHeadingId | documentから派生。保存しない |
 
 - IDはUUID文字列。文書内の全ブロック・全listItem IDは一意。参照は文書IDと要素IDの組で識別する。
@@ -54,6 +54,12 @@ Zod strict schemaから型を導出する。以下は保存・変換・操作の
 
 ## Pure domain operations
 
+画像のfile/caption/alt/semanticsと制約は `../../docs/document-format.md` のv2定義に従う。画像はトップレベルのみ。
+revisionは不透明な正整数で連番を要求しない。draftTitleは確定前の作業状態で、保存前に名前の規則で検証する。
+見出し選択はblock ID/UTF-16 offsetで指定する。隣接LFをブロック境界に変換しても空の前後断片を残す。
+最初の断片は元ID、追加断片は新ID、metadataは複製し既存見出しlevelを保持する。
+子Listの種類変更はList ID/metadataと全項目を保持する。
+
 createDocument、renameDocument、replaceText、insertBlock、deleteBlock、moveBlock、
 setHeadingLevel、convertParagraphHeading、insertListItem、deleteListItem、indentListItem、
 outdentListItem、acceptBodyChange、deriveOutline、serialize、deserializeを純粋関数として定義する。
@@ -64,7 +70,7 @@ clock/IDは値または関数引数で注入。結果は新Documentまたは型�
 ## Validation and equivalence
 
 1. decodeはUTF-8 JSON構文→format/version→Zod構造→ID一意性・階層制約の順に検証。
-2. schemaVersionが1以外はUnsupportedVersion。MVPでは移行も旧版推測も行わない。
+2. schemaVersionは1/2に対応、それ以外はUnsupportedVersion。v1は無変換、画像の明示挿入でv2へ移行し画像削除後もv2を保持する（ADR-008）。
 3. serialize/deserializeはDocument全体の深い同等性を保証する。JSONキー順・空白は問わない。
 4. 編集での同等性は明示した変更箇所とupdatedAt以外について検証する。
 5. editor往復も全Documentが等しいことを検証し、保存用revision、selection、履歴は比較対象外。
@@ -75,7 +81,7 @@ clock/IDは値または関数引数で注入。結果は新Documentまたは型�
 ## Session transitions
 
 - 新規作成: 有効な空Document→dirty、baseRevision=null。初回保存はcreate。
-- load: 検証済みDocumentとrevision→clean。履歴を新規生成する。
+- load: 検証済みDocumentとrevision→clean。loadVersionを進め同IDでも履歴を新規生成する。待機中に編集が進んだ結果は受理しない。
 - edit/rename/undo/redo: generationを増加し、savedSnapshotと意味的比較してdirtyを判定する。
 - save: 有効なsnapshot・generationを固定→saving。完了後baseRevisionを更新。
   現在snapshotが保存対象と同等ならclean、保存中に編集が進んでいればdirty。

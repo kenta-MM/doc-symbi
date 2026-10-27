@@ -34,3 +34,18 @@ test('insert/delete item and remove empty lists without empty document', () => {
   expect(applyListCommand(inserted, { type: 'deleteListItem', id: item.id }, environment)).toEqual(document);
   expect(applyListCommand(document, { type: 'deleteListItem', id: itemId }, environment).blocks[0]).toMatchObject({ kind: 'paragraph', text: '' });
 });
+
+test('changing nested list style preserves IDs, metadata and other lists', () => {
+  const environment = { id: fixedIds(), clock: () => fixedTime };
+  const document = validateDocument(fixtureDocument(1));
+  const list = document.blocks[3]!;
+  if (list.kind !== 'list') throw new Error('fixture');
+  const nested = list.items[0]!.children[0]!;
+  const changed = applyListCommand(document, { type: 'setListStyle', listId: nested.id, style: 'bullet' }, environment);
+  const expected = structuredClone(document);
+  const expectedList = expected.blocks[3]!;
+  if (expectedList.kind !== 'list') throw new Error('fixture');
+  expectedList.items[0]!.children[0]!.style = 'bullet';
+  expect(changed).toEqual(expected);
+  expect(applyListCommand(changed, { type: 'setListStyle', listId: nested.id, style: 'ordered' }, environment)).toEqual(document);
+});

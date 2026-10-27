@@ -9,7 +9,7 @@ import { toEditor, fromEditor } from './adapter';
 import { closeHistory } from './history';
 
 export function executeCommand(editor: Editor, current: Document, command: EditorCommand, environment: DocumentEnvironment): void {
-  const expected = ['insertListItem', 'deleteListItem', 'indentListItem', 'outdentListItem'].includes(command.type)
+  const expected = ['setListStyle', 'insertListItem', 'deleteListItem', 'indentListItem', 'outdentListItem'].includes(command.type)
     ? applyListCommand(current, command, environment) : applyCommand(current, command, environment);
   if (equivalent(expected.blocks, current.blocks)) return;
   const target = editor.schema.nodeFromJSON(toEditor(expected));

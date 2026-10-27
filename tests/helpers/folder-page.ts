@@ -12,6 +12,14 @@ export async function prepareFolder(page: Page, url = 'http://localhost:4173/') 
   await expect(page.locator('.document-sidebar')).toContainText('保存先: articles');
 }
 export const test = base.extend({
-  page: async ({ page }, use) => { await prepareFolder(page); await use(page); },
+  page: async ({ page, context }, use, testInfo) => {
+    await prepareFolder(page);
+    if (testInfo.project.name === 'e2e-offline') {
+      await expect(page.getByText('オフライン利用の準備完了', { exact: true })).toBeVisible();
+      await context.setOffline(true);
+      await page.reload();
+    }
+    await use(page);
+  },
 });
 export { expect };

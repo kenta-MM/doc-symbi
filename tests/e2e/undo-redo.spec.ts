@@ -14,10 +14,16 @@ test('history crosses save, keeps renamed title, clears redo on new edit and iso
   await expect(page.locator('.tiptap')).toContainText('履歴の本文');
   await page.locator('.tiptap').click(); await page.keyboard.press('Control+z');
   await page.keyboard.insertText('別の編集');
+  await page.keyboard.press('Control+y');
+  await expect(page.locator('.tiptap')).toHaveText('別の編集');
+  await expect(page.getByRole('note')).toContainText('やり直せる編集はありません');
   await expect(page.getByRole('button', { name: 'やり直す', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
   await page.getByRole('button', { name: '破棄して移動', exact: true }).click();
   await expect(page.getByRole('button', { name: '元に戻す', exact: true })).toHaveCount(0);
   await expect(page.locator('.tiptap')).toHaveText('');
+  await page.locator('.tiptap').focus(); await page.keyboard.press('Control+z');
+  await expect(page.locator('.tiptap')).toHaveText('');
+  await expect(page.getByRole('note')).toContainText('取り消せる編集はありません');
 });
 

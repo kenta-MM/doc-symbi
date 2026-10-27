@@ -5,6 +5,7 @@ export function requiresNavigationGuard(state: SessionState): boolean {
 export async function resolveNavigation(choice: 'save' | 'discard' | 'cancel', session: DocumentSession, action: () => void | Promise<void>): Promise<void> {
   if (choice === 'cancel') return;
   if (choice === 'save') await session.save();
+  if (choice === 'save' && requiresNavigationGuard(session.state)) throw new Error('保存中に変更がありました。もう一度保存してから移動してください');
   if (choice === 'discard' && session.state.saveState === 'saving') throw new Error('保存の完了を待ってください');
   await action();
 }

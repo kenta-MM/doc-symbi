@@ -1,0 +1,33 @@
+import { expect, test } from '../helpers/folder-page';
+
+test('GUI builds all block types and three mixed list levels, then saves and restores them', async ({ page }) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  const body = page.locator('.tiptap');
+  await body.fill('本文😀');
+  await page.getByRole('button', { name: '段落', exact: true }).click();
+  await body.locator('p').last().fill('節');
+  await page.getByRole('button', { name: '見出し', exact: true }).click();
+  await expect(body.locator('h1')).toHaveText('節');
+  await page.getByRole('button', { name: 'コード', exact: true }).click();
+  await body.locator('pre').fill('  日本語\n\tコード😀  ');
+  await page.getByRole('button', { name: '箇条書き', exact: true }).click();
+  await body.locator('li > p').last().fill('parent');
+  await page.getByRole('button', { name: '項目追加', exact: true }).click();
+  await body.locator('li > p').last().fill('child');
+  await page.getByRole('button', { name: '字下げ', exact: true }).click();
+  await page.getByLabel('選択項目のリスト種類').selectOption('ordered');
+  await page.getByRole('button', { name: '項目追加', exact: true }).click();
+  await body.locator('li > p').last().fill('grandchild');
+  await page.getByRole('button', { name: '字下げ', exact: true }).click();
+  await page.getByLabel('選択項目のリスト種類').selectOption('bullet');
+  await expect(body.locator('ul > li > ol > li > ul')).toHaveText('grandchild');
+  await body.focus(); await page.keyboard.press('Control+z');
+  await expect(body.locator('ul > li > ol > li > ol')).toHaveText('grandchild');
+  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByRole('status')).toContainText('保存済み');
+  await page.reload();
+  await expect(body.locator('ul > li > ol > li > ul')).toHaveText('grandchild');
+  await expect(body.locator('h1')).toHaveText('節');
+  await expect(body.locator('pre')).toHaveText('  日本語\n\tコード😀  ');
+});

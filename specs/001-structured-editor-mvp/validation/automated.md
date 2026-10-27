@@ -1,41 +1,22 @@
-# Automated validation — 2026-10-25
+# Automated validation — 2026-10-27
 
 | Check | Result |
 | --- | --- |
-| TypeScript strict | PASS |
-| ESLint + dependency/cycle checks | PASS |
-| Unit | 64 passed |
-| Contract | 98 passed |
-| Chromium integration | 12 passed |
-| Chromium E2E | 13 passed |
-| Performance | 1 passed; 20 runs per metric |
-| Production build + SW injection | PASS; 5 app assets precached |
-| Whitespace / diff check | PASS |
+| TypeScript strict | PASS (production build includes tsc --noEmit) |
+| ESLint + dependency/cycle checks | PASS; 53 source files |
+| Unit | 75 passed |
+| Contract | 108 passed |
+| Chromium integration | 22 passed |
+| Chromium E2E | 59 passed across online/offline projects |
+| Performance | 1 passed; 20 samples per metric |
+| Production build + SW injection | PASS; 5 assets precached |
 
-188 automatic tests passed. No skipped tests or focused-only suites.
+265 automatic tests passed across the listed suites. The suite uses isolated storage and Chromium 156.0.8078.4; it does not certify ordinary Chrome/Edge profiles or OS folder permissions. FileRepository tests use actual OPFS handles in place of the OS picker. Legacy IndexedDB tests remain as compatibility evidence.
 
-Evidence includes 24 × 10 codec cycles, 24 × 10 editor-adapter cycles,
-24 × 10 real editor/IndexedDB save/read cycles, all 24 files exported and restored
-through UI in a separate empty browser context with full deep equality,
-100 mixed text/heading/order/list history events, native split/paste/composition,
-metadata-mismatched native list join rejection, two-page CAS, quota/abort,
-corrupt records, unknown DB version, unsaved navigation and deletion cancellation,
-offline reload, true browser/server shutdown cold start, waiting SW update protection,
-outline and history offline, and no external document requests.
+Current coverage includes 24 documents × 10 editor/file save/read cycles, two-page file CAS, stale delete/save, quota/abort preservation, malformed-file errors, all 24 portable files restored with deep equality, and independent v1/v2 semantic reading (heading level, list style, image bytes and descriptions). Selection tests cover partial/reverse/multi-block headings, surrounding empty lines, Japanese/emoji, cursor lines and history. Lifecycle regressions cover late load/delete/save, title drafts, same-ID reload, view switching and unavailable history feedback.
 
-Visual QA: inspected `test-results/editor-review.png` (generated, untracked),
-including toolbar, title, save state, outline, code, mixed lists and footer.
+The e2e-offline fixture waits for Service Worker preparation, disconnects, then reloads before each test. True browser/server shutdown and waiting Service Worker updates have dedicated tests. See acceptance.md for the 24 acceptance-scenario mapping. Synthetic composition evidence is not real Windows IME acceptance.
 
-Performance (actual Core Ultra 7 155H, ~32 GiB, Windows 11 Pro, headless Chromium
-156.0.8078.4): all 20 runs within thresholds; max display 400.9 ms, navigation
-124.4 ms, input 98.1 ms. This does NOT certify the specified i5-1135G7/16GB
-reference machine. See performance.md/json. Initial timings are retained in
-performance-initial.json; input measurement was corrected to beforeinput→paint,
-excluding automation transport delay. No failing samples were dropped.
+Performance on Core Ultra 7 155H / 31.52 GiB / Windows 11 Pro: display 20/20 within 2000 ms (max 344.4), navigation 20/20 within 1000 ms (max 158.3), input 19/20 within 100 ms (max 101.9). All samples are retained in performance.json; no outlier was removed. This meets the numerical 19/20 criterion on this machine only. The specified i5-1135G7/16GB machine and power settings remain unverified.
 
-Build warning: the app JS chunk is approximately 677 kB minified (~207 kB gzip).
-Measured display target passed on this machine; no speculative code-splitting was introduced.
-
-The blocked-IDB notification is injected on a real open request (DB v1 has no
-older nonzero version to upgrade). Real IME, ordinary browser profiles and
-first-use participants remain untested; see acceptance.md.
+Build emits a chunk-size advisory: JS 701.75 kB minified / 214.85 kB gzip. No speculative splitting was introduced. Initial failures from obsolete UI assertions, nondeterministic keyboard selection setup and a recursive Playwright TypeScript payload were corrected and rerun; they were not marked as successful runs.

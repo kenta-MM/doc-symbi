@@ -1,9 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, prepareFolder } from '../helpers/folder-page';
 import { serveTestBuild } from '../helpers/static-server';
 test('waiting service worker does not reload unsaved edits and update uses the guard', async ({ page }) => {
   const server = await serveTestBuild();
   try {
-    await page.goto(server.origin);
+    await prepareFolder(page, server.origin);
     await expect(page.getByText('オフライン利用の準備完了', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '新規作成', exact: true }).click();
     await page.locator('.tiptap').fill('更新前の未保存本文');

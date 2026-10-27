@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../helpers/folder-page';
 test('create, edit Japanese and emoji, save and reopen', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
@@ -7,6 +7,14 @@ test('create, edit Japanese and emoji, save and reopen', async ({ page }) => {
   await page.locator('.tiptap').fill('日本語 😀\n  本文');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存済み', exact: true })).toBeDisabled();
+  await page.getByLabel('文書名', { exact: true }).fill('タイトルを入力中');
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toBeEnabled();
+  await page.getByLabel('文書名', { exact: true }).press('Control+s');
+  await expect(page.getByRole('button', { name: '保存済み', exact: true })).toBeDisabled();
+  await page.getByLabel('文書名', { exact: true }).fill('はじめての文書');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('button', { name: '保存済み', exact: true })).toBeDisabled();
   await page.reload();
   await page.getByRole('button', { name: /はじめての文書/ }).click();
   await expect(page.locator('.tiptap')).toContainText('日本語 😀');
@@ -17,9 +25,11 @@ test('storage failure displays failure and preserves current and saved content',
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('現在の編集');
-  await page.evaluate(() => { IDBObjectStore.prototype.put = function () { throw new DOMException('容量不足', 'QuotaExceededError'); }; });
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toBeEnabled();
+  await page.evaluate(() => { FileSystemFileHandle.prototype.createWritable = async function () { throw new DOMException('容量不足', 'QuotaExceededError'); }; });
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存失敗' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toBeEnabled();
   await expect(page.locator('.tiptap')).toContainText('現在の編集');
   page.on('dialog', dialog => dialog.accept());
   await page.reload();

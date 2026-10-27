@@ -1,0 +1,684 @@
+{
+  "format": "docsymbi",
+  "schemaVersion": 2,
+  "id": "70379237-75a8-47d0-aa3a-dc3c5acbc6fb",
+  "title": "Azure SQL Database Hyperscale — アーキテクチャ解説",
+  "createdAt": "2026-10-26T01:16:39.984Z",
+  "updatedAt": "2026-10-26T01:33:35.458Z",
+  "metadata": {
+    "researchDate": "2026-10-26",
+    "sources": [
+      {
+        "title": "Hyperscale distributed functions architecture",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql"
+      },
+      {
+        "title": "Hyperscale secondary replicas",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/service-tier-hyperscale-replicas?view=azuresql"
+      },
+      {
+        "title": "Automated backups for Hyperscale databases",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-automated-backups-overview?view=azuresql"
+      },
+      {
+        "title": "SQL Hyperscale performance troubleshooting diagnostics",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql"
+      }
+    ]
+  },
+  "blocks": [
+    {
+      "kind": "heading",
+      "id": "bca9b173-e3db-47cc-bdb8-d0d96132676a",
+      "metadata": {},
+      "text": "Azure SQL Database Hyperscale のアーキテクチャ",
+      "level": 1
+    },
+    {
+      "kind": "paragraph",
+      "id": "7d823f6f-731e-46bb-af63-99f97061beb6",
+      "metadata": {},
+      "text": "Microsoft Learn の公式リファレンスを基にした構成解説。確認日：2026年10月26日。図は説明用に簡略化した独自作図で、配置や台数を指定する設計図ではありません。本文の [1]〜[4] は末尾の公式資料に対応します。"
+    },
+    {
+      "kind": "heading",
+      "id": "c73e1a0f-6c11-4f9b-98ab-c30e9ad1269d",
+      "metadata": {},
+      "text": "1. 全体像：計算処理とデータ保存を分離する",
+      "level": 2
+    },
+    {
+      "kind": "paragraph",
+      "id": "2113489a-1c4c-4d45-842a-5ad2610dfb39",
+      "metadata": {},
+      "text": "Hyperscale は Azure SQL Database のサービス階層です。SQL を処理する Compute、ページを提供する Page Server、変更ログを配布する Log Service、永続保存を担う Azure Storage に役割を分けます。単一データベースの保存容量は最大128 TB。読み書きを受け付ける Primary Compute は1つです。[1]"
+    },
+    {
+      "kind": "image",
+      "id": "87b8a996-4fe9-48f5-9d2e-e43010671c25",
+      "metadata": {
+        "figureNumber": 1,
+        "author": "DocSymbi / AI-assisted",
+        "representation": "conceptual-diagram"
+      },
+      "file": {
+        "id": "d15b1dca-11c8-4522-8816-d95258396e80",
+        "fileName": "figure-1.svg",
+        "mimeType": "image/svg+xml",
+        "byteLength": 5719,
+        "width": 1000,
+        "height": 920,
+        "data": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjkyMCIgdmlld0JveD0iMCAwIDEwMDAgOTIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUgZGVzYyI+PHRpdGxlIGlkPSJ0aXRsZSI+5ZuzMe+8muWHpueQhuODu+ODreOCsOODu+S/neWtmOOBruWIhumbojwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPlByaW1hcnkg44GM5pu05paw44KS5Yem55CG44GX44CBTG9nIFNlcnZpY2Ug44GM5aSJ5pu044Ot44Kw44KS44Oa44O844K444K144O844OQ44O844Go6Kqt44G/5Y+W44KK44Os44OX44Oq44Kr44G46YWN5biD44GZ44KL44CCQ29tcHV0ZSDjga8gUGFnZSBTZXJ2ZXIg44GL44KJ5b+F6KaB44Gq44Oa44O844K444KS5Y+W5b6X44GX44CB5rC457aa44OH44O844K/44GvIEF6dXJlIFN0b3JhZ2Ug44Gr5L+d5a2Y44GV44KM44KL44CCPC9kZXNjPjxkZWZzPjxtYXJrZXIgaWQ9ImRhdGEiIHZpZXdCb3g9IjAgMCAxMCAxMCIgcmVmWD0iOSIgcmVmWT0iNSIgbWFya2VyV2lkdGg9IjgiIG1hcmtlckhlaWdodD0iOCIgb3JpZW50PSJhdXRvLXN0YXJ0LXJldmVyc2UiPjxwYXRoIGQ9Ik0wIDAgTDEwIDUgTDAgMTAgWiIgZmlsbD0iIzMxNzRiOCIvPjwvbWFya2VyPjxtYXJrZXIgaWQ9ImxvZyIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTTAgMCBMMTAgNSBMMCAxMCBaIiBmaWxsPSIjYWM2NDE4Ii8+PC9tYXJrZXI+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjkyMCIgcng9IjE4IiBmaWxsPSJ3aGl0ZSIvPjxnIGZvbnQtZmFtaWx5PSJZdSBHb3RoaWMsIE1laXJ5bywgc2Fucy1zZXJpZiIgZmlsbD0iIzFjMzU0NSI+PHRleHQgeD0iNDAiIHk9IjQ4IiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iNzAwIj4wMSAg5Yem55CG44O744Ot44Kw44O75L+d5a2Y44Gu5YiG6ZuiPC90ZXh0Pjx0ZXh0IHg9IjQwIiB5PSI4MyIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzUyNjg3OCI+5YWo5L2T5qeL5oiQICAvICBDb21wdXRl44O7TG9nIFNlcnZpY2Xjg7tQYWdlIFNlcnZlcuODu0F6dXJlIFN0b3JhZ2U8L3RleHQ+PGcgaWQ9InJlbGF0aW9uLTEiPjxwYXRoIGQ9Ik0xNjUgMjA2IFYzMDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjE5MCIgeT0iMjU1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+6Kqt44G/5pu444GNPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tMiI+PHBhdGggZD0iTTgzNSAyMDYgVjMwMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIC8+PHRleHQgeD0iODUwIiB5PSIyNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMzMTc0YjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7oqq3jgb/lj5bjgoo8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi0zIj48cGF0aCBkPSJNMjgwIDM0MyBIMzg1IiBmaWxsPSJub25lIiBzdHJva2U9IiNhYzY0MTgiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNsb2cpIiAvPjx0ZXh0IHg9IjMzMCIgeT0iMzI3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjYWM2NDE4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44Ot44KwPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tNCI+PHBhdGggZD0iTTYxNSAzNDMgSDcyMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYWM2NDE4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjbG9nKSIgLz48dGV4dCB4PSI2NjUiIHk9IjMyNyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iI2FjNjQxOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPuODreOCsDwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTUiPjxwYXRoIGQ9Ik01MDAgMzg2IFY1MjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2FjNjQxOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2xvZykiIC8+PHRleHQgeD0iNTM1IiB5PSI0NTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiNhYzY0MTgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7jg63jgrDpgannlKg8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi02Ij48cGF0aCBkPSJNMTY1IDM4NiBWNTYzIEgzODUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiBtYXJrZXItc3RhcnQ9InVybCgjZGF0YSkiLz48dGV4dCB4PSIyMTAiIHk9IjU0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzMxNzRiOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPuODmuODvOOCuOWPluW+lzwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTciPjxwYXRoIGQ9Ik04MzUgMzg2IFY1NjMgSDYxNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIG1hcmtlci1zdGFydD0idXJsKCNkYXRhKSIvPjx0ZXh0IHg9Ijc4NSIgeT0iNTQwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44Oa44O844K45Y+W5b6XPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tOCI+PHBhdGggZD0iTTUwMCA2MDYgVjcwMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIC8+PHRleHQgeD0iNTYwIiB5PSI2NTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMzMTc0YjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7jg4fjg7zjgr/kv53lrZg8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi05Ij48cGF0aCBkPSJNNDEwIDM4NiBWNDYwIEg3MCBWNzAwIiBmaWxsPSJub25lIiBzdHJva2U9IiNhYzY0MTgiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNsb2cpIiAvPjx0ZXh0IHg9IjE2MiIgeT0iNDQ1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjYWM2NDE4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44Ot44Kw44Gu6ZW35pyf5L+d5a2YPC90ZXh0PjwvZz48ZyBpZD0iYXBwIj48cmVjdCB4PSI1MCIgeT0iMTIwIiB3aWR0aD0iMjMwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlYWYzZmYiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMTY1IiB5PSIxNzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPuabtOaWsOOCouODl+ODqjwvdGV4dD48L2c+PGcgaWQ9InJlYWRlcnMiPjxyZWN0IHg9IjcyMCIgeT0iMTIwIiB3aWR0aD0iMjMwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlYWYzZmYiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iODM1IiB5PSIxNzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPuWPgueFp+OCouODl+ODqjwvdGV4dD48L2c+PGcgaWQ9InByaW1hcnkiPjxyZWN0IHg9IjUwIiB5PSIzMDAiIHdpZHRoPSIyMzAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2VhZjNmZiIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIxNjUiIHk9IjM1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+UHJpbWFyeSBDb21wdXRlPC90ZXh0PjwvZz48ZyBpZD0ibG9nIj48cmVjdCB4PSIzODUiIHk9IjMwMCIgd2lkdGg9IjIzMCIgaGVpZ2h0PSI4NiIgcng9IjE0IiBmaWxsPSIjZmZmMGRjIiBzdHJva2U9IiNhYzY0MTgiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwMCIgeT0iMzUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj5Mb2cgU2VydmljZTwvdGV4dD48L2c+PGcgaWQ9InJlcGxpY2FzIj48cmVjdCB4PSI3MjAiIHk9IjMwMCIgd2lkdGg9IjIzMCIgaGVpZ2h0PSI4NiIgcng9IjE0IiBmaWxsPSIjZWFmM2ZmIiBzdHJva2U9IiMzMTc0YjgiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjgzNSIgeT0iMzUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj5IQSAvIE5hbWVkPC90ZXh0PjwvZz48ZyBpZD0icGFnZXMiPjxyZWN0IHg9IjM4NSIgeT0iNTIwIiB3aWR0aD0iMjMwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlN2Y1ZWQiIHN0cm9rZT0iIzI4NzI1NCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNTAwIiB5PSI1NzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPlBhZ2UgU2VydmVyczwvdGV4dD48L2c+PGcgaWQ9InN0b3JhZ2UiPjxyZWN0IHg9IjM4NSIgeT0iNzAwIiB3aWR0aD0iMjMwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlN2Y1ZWQiIHN0cm9rZT0iIzI4NzI1NCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNTAwIiB5PSI3NTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPkF6dXJlIFN0b3JhZ2U8L3RleHQ+PC9nPjxnIGlkPSJsb2dzIj48cmVjdCB4PSI1MCIgeT0iNzAwIiB3aWR0aD0iMjMwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlN2Y1ZWQiIHN0cm9rZT0iIzI4NzI1NCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMTY1IiB5PSI3NTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPumVt+acn+ODreOCsOS/neWtmDwvdGV4dD48L2c+PGxpbmUgeDE9IjQwIiB5MT0iODU1IiB4Mj0iOTYwIiB5Mj0iODU1IiBzdHJva2U9IiNkY2U1ZWIiLz48dGV4dCB4PSI0MCIgeT0iODgzIiBmb250LXNpemU9IjE1IiBmaWxsPSIjNTI2ODc4Ij7pnZLvvJrjg5rjg7zjgrjlj5blvpfjg7vliKnnlKjplqLkv4IgIOapme+8muODreOCsO+8j+ODrOODl+ODquOCseODvOOCt+ODp+ODsyAg57eR44Gu5p6g77ya5L+d5a2Y5bGkPC90ZXh0Pjx0ZXh0IHg9IjQwIiB5PSI5MDciIGZvbnQtc2l6ZT0iMTMiIGZpbGw9IiM2NTc4ODciPk1pY3Jvc29mdCBMZWFybiDjgavln7rjgaXjgY/mpoLlv7Xlm7MgwrcgMjAyNi0xMC0yNiDCtyDniannkIbphY3nva7jgoTlhpfplbflj7DmlbDjga/nnIHnlaU8L3RleHQ+PC9nPjwvc3ZnPg=="
+      },
+      "caption": "図1：処理・ログ・保存の分離",
+      "alt": "Primary が更新を処理し、Log Service が変更ログをページサーバーと読み取りレプリカへ配布する。Compute は Page Server から必要なページを取得し、永続データは Azure Storage に保存される。",
+      "semantics": {
+        "version": 1,
+        "purpose": "Hyperscale の主要コンポーネントの責務と、ページ取得経路・ログ配布経路の違いを理解する。",
+        "summary": "Primary が更新を処理し、Log Service が変更ログをページサーバーと読み取りレプリカへ配布する。Compute は Page Server から必要なページを取得し、永続データは Azure Storage に保存される。",
+        "entities": [
+          {
+            "id": "app",
+            "label": "更新アプリ",
+            "role": "SQL の読み書きを Primary に要求する。"
+          },
+          {
+            "id": "readers",
+            "label": "参照アプリ",
+            "role": "読み取り処理をレプリカへ要求する。"
+          },
+          {
+            "id": "primary",
+            "label": "Primary Compute",
+            "role": "SQL・更新処理。メモリとRBPEXキャッシュを持つ。"
+          },
+          {
+            "id": "log",
+            "label": "Log Service",
+            "role": "更新ログの永続化と各コンポーネントへの配布。"
+          },
+          {
+            "id": "replicas",
+            "label": "HA / Named",
+            "role": "読み取り系Compute。共有ストレージを利用する。"
+          },
+          {
+            "id": "pages",
+            "label": "Page Servers",
+            "role": "ページを提供し、受信したログで担当データを更新する。"
+          },
+          {
+            "id": "storage",
+            "label": "Azure Storage",
+            "role": "データファイルとスナップショットを永続保存する。"
+          },
+          {
+            "id": "logs",
+            "label": "長期ログ保存",
+            "role": "復元に利用するトランザクションログを保持する。"
+          }
+        ],
+        "relationships": [
+          {
+            "from": "app",
+            "to": "primary",
+            "meaning": "SQL の読み書き要求"
+          },
+          {
+            "from": "readers",
+            "to": "replicas",
+            "meaning": "SQL の読み取り要求"
+          },
+          {
+            "from": "primary",
+            "to": "log",
+            "meaning": "更新ログの送信"
+          },
+          {
+            "from": "log",
+            "to": "replicas",
+            "meaning": "変更ログを配布する"
+          },
+          {
+            "from": "log",
+            "to": "pages",
+            "meaning": "ページ更新のためのログを配布する"
+          },
+          {
+            "from": "primary",
+            "to": "pages",
+            "meaning": "ページ要求と応答（キャッシュミス時）"
+          },
+          {
+            "from": "replicas",
+            "to": "pages",
+            "meaning": "読み取りレプリカのページ要求と応答"
+          },
+          {
+            "from": "pages",
+            "to": "storage",
+            "meaning": "データファイルを永続化する"
+          },
+          {
+            "from": "log",
+            "to": "logs",
+            "meaning": "ログを長期保存する"
+          }
+        ],
+        "readingOrder": [
+          "app",
+          "readers",
+          "primary",
+          "log",
+          "replicas",
+          "pages",
+          "storage",
+          "logs"
+        ],
+        "assumptions": [
+          "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+          "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+          "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+          "HA / Named は同じ保存領域を共有する。Geo replica はこの図には含めない。",
+          "Compute のメモリとローカルSSD（RBPEX）キャッシュをまとめて表示。読み取りではまずキャッシュを利用する。"
+        ],
+        "sources": [
+          {
+            "title": "Microsoft Learn: Hyperscale architecture",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+            "accessedAt": "2026-10-26"
+          },
+          {
+            "title": "Microsoft Learn: Performance diagnostics",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql",
+            "accessedAt": "2026-10-26"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "paragraph",
+      "id": "51251788-1d00-4e34-bb08-37a4d60ecd3f",
+      "metadata": {},
+      "text": "Compute はクエリ・トランザクションを実行します。Page Server はデータの一部分を担当し、ログを再生してページを更新します。Log Service は変更を各コンポーネントへ伝えます。Azure Storage はデータファイルとバックアップを保持します。HA と Named replica は Primary と保存領域を共有するため、追加時にデータ全体をコピーする必要がありません。[1]"
+    },
+    {
+      "kind": "heading",
+      "id": "1faa3ae9-0175-4d72-86cb-ed701505f64d",
+      "metadata": {},
+      "text": "2. 読み取りと更新の流れ",
+      "level": 2
+    },
+    {
+      "kind": "image",
+      "id": "8e887197-3153-4a2a-9080-2a05063b98f1",
+      "metadata": {
+        "figureNumber": 2,
+        "author": "DocSymbi / AI-assisted",
+        "representation": "conceptual-diagram"
+      },
+      "file": {
+        "id": "cefb0ee8-3e0e-44ae-a28f-469de8612cd1",
+        "fileName": "figure-2.svg",
+        "mimeType": "image/svg+xml",
+        "byteLength": 4259,
+        "width": 1000,
+        "height": 920,
+        "data": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjkyMCIgdmlld0JveD0iMCAwIDEwMDAgOTIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUgZGVzYyI+PHRpdGxlIGlkPSJ0aXRsZSI+5ZuzMu+8muW/heimgeOBquODmuODvOOCuOOCkuautemajueahOOBq+WPluW+lzwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPuODoeODouODquOBq+OBquOBhOODmuODvOOCuOOCklJCUEVY44Gn5o6i44GX44CB44Gd44GT44Gr44KC44Gq44GR44KM44GwUGFnZSBTZXJ2ZXLjgbjopoHmsYLjgZnjgovjgILopoHmsYJMU07jgavpgZTjgZnjgovjgb7jgaflvoXmqZ/jgZnjgovloLTlkIjjgYzjgYLjgorjgIHlj5blvpflvozjga9Db21wdXRl44Gn44Kv44Ko44Oq44KS5Yem55CG44GZ44KL44CCPC9kZXNjPjxkZWZzPjxtYXJrZXIgaWQ9ImRhdGEiIHZpZXdCb3g9IjAgMCAxMCAxMCIgcmVmWD0iOSIgcmVmWT0iNSIgbWFya2VyV2lkdGg9IjgiIG1hcmtlckhlaWdodD0iOCIgb3JpZW50PSJhdXRvLXN0YXJ0LXJldmVyc2UiPjxwYXRoIGQ9Ik0wIDAgTDEwIDUgTDAgMTAgWiIgZmlsbD0iIzMxNzRiOCIvPjwvbWFya2VyPjxtYXJrZXIgaWQ9ImxvZyIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTTAgMCBMMTAgNSBMMCAxMCBaIiBmaWxsPSIjYWM2NDE4Ii8+PC9tYXJrZXI+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjkyMCIgcng9IjE4IiBmaWxsPSJ3aGl0ZSIvPjxnIGZvbnQtZmFtaWx5PSJZdSBHb3RoaWMsIE1laXJ5bywgc2Fucy1zZXJpZiIgZmlsbD0iIzFjMzU0NSI+PHRleHQgeD0iNDAiIHk9IjQ4IiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iNzAwIj4wMiAg5b+F6KaB44Gq44Oa44O844K444KS5q616ZqO55qE44Gr5Y+W5b6XPC90ZXh0Pjx0ZXh0IHg9IjQwIiB5PSI4MyIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzUyNjg3OCI+6Kqt44G/5Y+W44KK57WM6LevICAvICDjgq3jg6Pjg4Pjgrfjg6Xjg5Ljg4Pjg4jjgajjg6rjg6Ljg7zjg4joqq3jgb/lj5bjgoo8L3RleHQ+PGcgaWQ9InJlbGF0aW9uLTEiPjxwYXRoIGQ9Ik0yOTUgMjQ2IFYzNTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjM4MCIgeT0iMzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44Kt44Oj44OD44K344Ol44Of44K5PC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tMiI+PHBhdGggZD0iTTI5NSA0MzYgVjU1MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIC8+PHRleHQgeD0iMzgwIiB5PSI0OTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMzMTc0YjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7jgq3jg6Pjg4Pjgrfjg6Xjg5/jgrk8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi0zIj48cGF0aCBkPSJNNTEwIDIwMyBIODEwIFYzNTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjY4MCIgeT0iMTg1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44OS44OD44OIPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tNCI+PHBhdGggZD0iTTUxMCAzOTMgSDY4MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIC8+PHRleHQgeD0iNTkwIiB5PSIzNzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMzMTc0YjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7jg5Ljg4Pjg4g8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi01Ij48cGF0aCBkPSJNNTEwIDYwMCBIODEwIFY0NTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjczMCIgeT0iNjI1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+TFNO56K66KqN5b6M44Gr6L+U44GZPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tNiI+PHBhdGggZD0iTTk0MCA0MDAgSDk2NSBWNzQzIEg5NDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjkwMCIgeT0iNjgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+57WQ5p6cPC90ZXh0PjwvZz48ZyBpZD0ibWVtb3J5Ij48cmVjdCB4PSI4MCIgeT0iMTYwIiB3aWR0aD0iNDMwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlYWYzZmYiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMjk1IiB5PSIyMTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPuODoeODouODqiAvIEJ1ZmZlciBQb29sPC90ZXh0PjwvZz48ZyBpZD0icmJwZXgiPjxyZWN0IHg9IjgwIiB5PSIzNTAiIHdpZHRoPSI0MzAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2VhZjNmZiIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIyOTUiIHk9IjQwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+44Ot44O844Kr44OrU1NEIC8gUkJQRVg8L3RleHQ+PC9nPjxnIGlkPSJwYWdlcyI+PHJlY3QgeD0iODAiIHk9IjU1MCIgd2lkdGg9IjQzMCIgaGVpZ2h0PSIxMDAiIHJ4PSIxNCIgZmlsbD0iI2U3ZjVlZCIgc3Ryb2tlPSIjMjg3MjU0IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIyOTUiIHk9IjYwNyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+UGFnZSBTZXJ2ZXI8L3RleHQ+PC9nPjxnIGlkPSJxdWVyeSI+PHJlY3QgeD0iNjgwIiB5PSIzNTAiIHdpZHRoPSIyNjAiIGhlaWdodD0iMTAwIiByeD0iMTQiIGZpbGw9IiNlYWYzZmYiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iODEwIiB5PSI0MDciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPkNvbXB1dGUg44Gn44Kv44Ko44Oq5Yem55CGPC90ZXh0PjwvZz48ZyBpZD0icmVzdWx0Ij48cmVjdCB4PSI2ODAiIHk9IjcwMCIgd2lkdGg9IjI2MCIgaGVpZ2h0PSI4NiIgcng9IjE0IiBmaWxsPSIjZWFmM2ZmIiBzdHJva2U9IiMzMTc0YjgiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjgxMCIgeT0iNzUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj7jgqLjg5fjg6rjgbjntZDmnpzjgpLov5TjgZk8L3RleHQ+PC9nPjxsaW5lIHgxPSI0MCIgeTE9Ijg1NSIgeDI9Ijk2MCIgeTI9Ijg1NSIgc3Ryb2tlPSIjZGNlNWViIi8+PHRleHQgeD0iNDAiIHk9Ijg4MyIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzUyNjg3OCI+6Z2S77ya44Oa44O844K45Y+W5b6X44O75Yip55So6Zai5L+CICDmqZnvvJrjg63jgrDvvI/jg6zjg5fjg6rjgrHjg7zjgrfjg6fjg7MgIOe3keOBruaeoO+8muS/neWtmOWxpDwvdGV4dD48dGV4dCB4PSI0MCIgeT0iOTA3IiBmb250LXNpemU9IjEzIiBmaWxsPSIjNjU3ODg3Ij5NaWNyb3NvZnQgTGVhcm4g44Gr5Z+644Gl44GP5qaC5b+15ZuzIMK3IDIwMjYtMTAtMjYgwrcg54mp55CG6YWN572u44KE5YaX6ZW35Y+w5pWw44Gv55yB55WlPC90ZXh0PjwvZz48L3N2Zz4="
+      },
+      "caption": "図2：必要なページを段階的に取得",
+      "alt": "メモリにないページをRBPEXで探し、そこにもなければPage Serverへ要求する。要求LSNに達するまで待機する場合があり、取得後はComputeでクエリを処理する。",
+      "semantics": {
+        "version": 1,
+        "purpose": "SELECT のページ取得がメモリ、ローカルSSD、Page Server を使い分けることを理解する。",
+        "summary": "メモリにないページをRBPEXで探し、そこにもなければPage Serverへ要求する。要求LSNに達するまで待機する場合があり、取得後はComputeでクエリを処理する。",
+        "entities": [
+          {
+            "id": "memory",
+            "label": "メモリ / Buffer Pool",
+            "role": "Compute上で必要なページを検索する。"
+          },
+          {
+            "id": "rbpex",
+            "label": "ローカルSSD / RBPEX",
+            "role": "メモリにないページをComputeのSSDキャッシュで検索する。"
+          },
+          {
+            "id": "pages",
+            "label": "Page Server",
+            "role": "キャッシュにないページを要求されたLSNで提供する。"
+          },
+          {
+            "id": "query",
+            "label": "Compute でクエリ処理",
+            "role": "取得したページを使ってSQLを処理する。"
+          },
+          {
+            "id": "result",
+            "label": "アプリへ結果を返す",
+            "role": "SQLの実行結果を返す。"
+          }
+        ],
+        "relationships": [
+          {
+            "from": "memory",
+            "to": "rbpex",
+            "meaning": "メモリにページがない場合"
+          },
+          {
+            "from": "rbpex",
+            "to": "pages",
+            "meaning": "RBPEXにページがない場合"
+          },
+          {
+            "from": "memory",
+            "to": "query",
+            "meaning": "メモリのページを利用する"
+          },
+          {
+            "from": "rbpex",
+            "to": "query",
+            "meaning": "RBPEXのページを利用する"
+          },
+          {
+            "from": "pages",
+            "to": "query",
+            "meaning": "要求LSNのページを受信する。追従が必要なら待機する"
+          },
+          {
+            "from": "query",
+            "to": "result",
+            "meaning": "クエリ処理の結果を返す"
+          }
+        ],
+        "readingOrder": [
+          "memory",
+          "rbpex",
+          "pages",
+          "query",
+          "result"
+        ],
+        "assumptions": [
+          "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+          "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+          "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+          "ページ取得の概念図であり、SQL実行計画や全I/Oの時系列を表すものではない。",
+          "結果生成はComputeのクエリ処理で行う。Page ServerがSQLを実行する意味ではない。"
+        ],
+        "sources": [
+          {
+            "title": "Microsoft Learn: Performance diagnostics",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql",
+            "accessedAt": "2026-10-26"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "image",
+      "id": "29bfdf36-ac20-4a6d-abc5-a53356bc6f32",
+      "metadata": {
+        "figureNumber": 3,
+        "author": "DocSymbi / AI-assisted",
+        "representation": "conceptual-diagram"
+      },
+      "file": {
+        "id": "5c02e042-a004-43ec-b722-eda7c2ec8470",
+        "fileName": "figure-3.svg",
+        "mimeType": "image/svg+xml",
+        "byteLength": 4164,
+        "width": 1000,
+        "height": 920,
+        "data": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjkyMCIgdmlld0JveD0iMCAwIDEwMDAgOTIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUgZGVzYyI+PHRpdGxlIGlkPSJ0aXRsZSI+5ZuzM++8muabtOaWsOOBr+ODreOCsOOCkumAmuOBmOOBpuS8neOCj+OCizwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPlByaW1hcnkg44GvIExvZyBTZXJ2aWNlIOOBq+ODreOCsOOCkumAgeOCi+OAguODreOCsOOBryBMb2cgU2VydmljZSDjgafmsLjntprljJbjgZXjgozjgIFQYWdlIFNlcnZlciDjgavjgojjgovjg4fjg7zjgr/mm7TmlrDjgIHoqq3jgb/lj5bjgorjg6zjg5fjg6rjgqvjga7pnZ7lkIzmnJ/pgannlKjjgIHplbfmnJ/jg63jgrDkv53lrZjjgavjgaTjgarjgYzjgovjgII8L2Rlc2M+PGRlZnM+PG1hcmtlciBpZD0iZGF0YSIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTTAgMCBMMTAgNSBMMCAxMCBaIiBmaWxsPSIjMzE3NGI4Ii8+PC9tYXJrZXI+PG1hcmtlciBpZD0ibG9nIiB2aWV3Qm94PSIwIDAgMTAgMTAiIHJlZlg9IjkiIHJlZlk9IjUiIG1hcmtlcldpZHRoPSI4IiBtYXJrZXJIZWlnaHQ9IjgiIG9yaWVudD0iYXV0by1zdGFydC1yZXZlcnNlIj48cGF0aCBkPSJNMCAwIEwxMCA1IEwwIDEwIFoiIGZpbGw9IiNhYzY0MTgiLz48L21hcmtlcj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMDAiIGhlaWdodD0iOTIwIiByeD0iMTgiIGZpbGw9IndoaXRlIi8+PGcgZm9udC1mYW1pbHk9Ill1IEdvdGhpYywgTWVpcnlvLCBzYW5zLXNlcmlmIiBmaWxsPSIjMWMzNTQ1Ij48dGV4dCB4PSI0MCIgeT0iNDgiIGZvbnQtc2l6ZT0iMjgiIGZvbnQtd2VpZ2h0PSI3MDAiPjAzICDmm7TmlrDjga/jg63jgrDjgpLpgJrjgZjjgabkvJ3jgo/jgos8L3RleHQ+PHRleHQgeD0iNDAiIHk9IjgzIiBmb250LXNpemU9IjE2IiBmaWxsPSIjNTI2ODc4Ij7mm7TmlrDntYzot68gIC8gIOawuOe2muWMluOBqOmdnuWQjOacn+OBruODreOCsOmBqeeUqDwvdGV4dD48ZyBpZD0icmVsYXRpb24tMSI+PHBhdGggZD0iTTM3MCAyMDMgSDU5MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYWM2NDE4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjbG9nKSIgLz48dGV4dCB4PSI0NzUiIHk9IjE4MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iI2FjNjQxOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPuODreOCsOmAgeS/oTwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTIiPjxwYXRoIGQ9Ik02NTAgMjYwIFYzNjUgSDE4NSBWNDcwIiBmaWxsPSJub25lIiBzdHJva2U9IiNhYzY0MTgiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNsb2cpIiAvPjx0ZXh0IHg9IjMxMCIgeT0iMzQ3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjYWM2NDE4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44Ot44Kw6YWN5biDPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tMyI+PHBhdGggZD0iTTc0MCAyNjAgVjQwMCBINTAwIFY0NzAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2FjNjQxOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2xvZykiIC8+PHRleHQgeD0iNjI1IiB5PSI0MjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiNhYzY0MTgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7pnZ7lkIzmnJ/pgannlKg8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi00Ij48cGF0aCBkPSJNODMwIDI2MCBWMzUwIEg4MTUgVjQ3MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYWM2NDE4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjbG9nKSIgLz48dGV4dCB4PSI4ODUiIHk9IjM2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iI2FjNjQxOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPumVt+acn+S/neWtmDwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTUiPjxwYXRoIGQ9Ik0xODUgNTcwIFY3MDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjI3NSIgeT0iNjQwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+44OH44O844K/5pu05pawPC90ZXh0PjwvZz48ZyBpZD0icHJpbWFyeSI+PHJlY3QgeD0iNzAiIHk9IjE2MCIgd2lkdGg9IjMwMCIgaGVpZ2h0PSI4NiIgcng9IjE0IiBmaWxsPSIjZWFmM2ZmIiBzdHJva2U9IiMzMTc0YjgiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjIyMCIgeT0iMjEwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj5QcmltYXJ5IENvbXB1dGU8L3RleHQ+PC9nPjxnIGlkPSJsb2ciPjxyZWN0IHg9IjU5MCIgeT0iMTYwIiB3aWR0aD0iMzAwIiBoZWlnaHQ9IjEwMCIgcng9IjE0IiBmaWxsPSIjZmZmMGRjIiBzdHJva2U9IiNhYzY0MTgiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9Ijc0MCIgeT0iMjE3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj5Mb2cgU2VydmljZTwvdGV4dD48L2c+PGcgaWQ9InBhZ2VzIj48cmVjdCB4PSI1MCIgeT0iNDcwIiB3aWR0aD0iMjcwIiBoZWlnaHQ9IjEwMCIgcng9IjE0IiBmaWxsPSIjZTdmNWVkIiBzdHJva2U9IiMyODcyNTQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjE4NSIgeT0iNTI3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj5QYWdlIFNlcnZlcnM8L3RleHQ+PC9nPjxnIGlkPSJyZXBsaWNhIj48cmVjdCB4PSIzNjUiIHk9IjQ3MCIgd2lkdGg9IjI3MCIgaGVpZ2h0PSIxMDAiIHJ4PSIxNCIgZmlsbD0iI2VhZjNmZiIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSI1MDAiIHk9IjUyNyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+6Kqt44G/5Y+W44KK44Os44OX44Oq44KrPC90ZXh0PjwvZz48ZyBpZD0ibG9ncyI+PHJlY3QgeD0iNjgwIiB5PSI0NzAiIHdpZHRoPSIyNzAiIGhlaWdodD0iMTAwIiByeD0iMTQiIGZpbGw9IiNlN2Y1ZWQiIHN0cm9rZT0iIzI4NzI1NCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iODE1IiB5PSI1MjciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPumVt+acn+ODreOCsOS/neWtmDwvdGV4dD48L2c+PGcgaWQ9ImRhdGEiPjxyZWN0IHg9IjUwIiB5PSI3MDAiIHdpZHRoPSIyNzAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2U3ZjVlZCIgc3Ryb2tlPSIjMjg3MjU0IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIxODUiIHk9Ijc1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+44OH44O844K/44OV44Kh44Kk44OrPC90ZXh0PjwvZz48bGluZSB4MT0iNDAiIHkxPSI4NTUiIHgyPSI5NjAiIHkyPSI4NTUiIHN0cm9rZT0iI2RjZTVlYiIvPjx0ZXh0IHg9IjQwIiB5PSI4ODMiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM1MjY4NzgiPumdku+8muODmuODvOOCuOWPluW+l+ODu+WIqeeUqOmWouS/giAg5qmZ77ya44Ot44Kw77yP44Os44OX44Oq44Kx44O844K344On44OzICDnt5Hjga7mnqDvvJrkv53lrZjlsaQ8L3RleHQ+PHRleHQgeD0iNDAiIHk9IjkwNyIgZm9udC1zaXplPSIxMyIgZmlsbD0iIzY1Nzg4NyI+TWljcm9zb2Z0IExlYXJuIOOBq+WfuuOBpeOBj+amguW/teWbsyDCtyAyMDI2LTEwLTI2IMK3IOeJqeeQhumFjee9ruOChOWGl+mVt+WPsOaVsOOBr+ecgeeVpTwvdGV4dD48L2c+PC9zdmc+"
+      },
+      "caption": "図3：更新はログを通じて伝わる",
+      "alt": "Primary は Log Service にログを送る。ログは Log Service で永続化され、Page Server によるデータ更新、読み取りレプリカの非同期適用、長期ログ保存につながる。",
+      "semantics": {
+        "version": 1,
+        "purpose": "更新ログの永続化と、ページ／読み取りレプリカへの反映が別の役割であることを理解する。",
+        "summary": "Primary は Log Service にログを送る。ログは Log Service で永続化され、Page Server によるデータ更新、読み取りレプリカの非同期適用、長期ログ保存につながる。",
+        "entities": [
+          {
+            "id": "primary",
+            "label": "Primary Compute",
+            "role": "UPDATE等のトランザクションを処理する。"
+          },
+          {
+            "id": "log",
+            "label": "Log Service",
+            "role": "コミットに必要なログを永続化し、配布する。"
+          },
+          {
+            "id": "pages",
+            "label": "Page Servers",
+            "role": "担当するページにログを適用する。"
+          },
+          {
+            "id": "replica",
+            "label": "読み取りレプリカ",
+            "role": "ログを非同期に適用する。反映遅延があり得る。"
+          },
+          {
+            "id": "logs",
+            "label": "長期ログ保存",
+            "role": "バックアップ保持期間内の復元に利用する。"
+          },
+          {
+            "id": "data",
+            "label": "データファイル",
+            "role": "Page Serverが更新する永続データ。"
+          }
+        ],
+        "relationships": [
+          {
+            "from": "primary",
+            "to": "log",
+            "meaning": "更新ログを送信する"
+          },
+          {
+            "from": "log",
+            "to": "pages",
+            "meaning": "担当ページの更新に必要なログを配布する"
+          },
+          {
+            "from": "log",
+            "to": "replica",
+            "meaning": "読み取りレプリカへログを非同期に適用する"
+          },
+          {
+            "from": "log",
+            "to": "logs",
+            "meaning": "ログを長期保存へ送る"
+          },
+          {
+            "from": "pages",
+            "to": "data",
+            "meaning": "ログに従ってデータファイルを更新する"
+          }
+        ],
+        "readingOrder": [
+          "primary",
+          "log",
+          "pages",
+          "replica",
+          "logs",
+          "data"
+        ],
+        "assumptions": [
+          "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+          "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+          "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+          "矢印の分岐は各コンポーネントへの伝播を表し、完了時刻の同一性を保証しない。",
+          "コミット時の永続化先はLog Service。すべての読み取りレプリカへの適用完了を意味しない。",
+          "Primary が Page Server へデータページを直接書き込む方式ではない。"
+        ],
+        "sources": [
+          {
+            "title": "Microsoft Learn: Hyperscale architecture",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+            "accessedAt": "2026-10-26"
+          },
+          {
+            "title": "Microsoft Learn: Performance diagnostics",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql",
+            "accessedAt": "2026-10-26"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "paragraph",
+      "id": "33adb788-c834-4e9a-a5a1-6d41f1aa5fb4",
+      "metadata": {},
+      "text": "読み取りはメモリ／ローカルSSDのキャッシュを利用し、見つからないページを Page Server から取得します。要求したログ位置（LSN）に Page Server が追い付いていなければ待機します。更新時はログを Log Service で永続化し、セカンダリへ非同期に適用します。Compute が Page Server にデータページを直接書き込む方式ではありません。[4]"
+    },
+    {
+      "kind": "heading",
+      "id": "eb103712-4903-478e-9f52-62d26ecdb2ff",
+      "metadata": {},
+      "text": "3. レプリカの役割を使い分ける",
+      "level": 2
+    },
+    {
+      "kind": "paragraph",
+      "id": "61acbdd8-37f9-46eb-a558-8c53dbdcbb0b",
+      "metadata": {},
+      "text": "HA replica：フェールオーバーの待機系と読み取り負荷の分散を担います。Primary に最大4台を追加できます。Named replica：独立した名前・接続先・サービスレベルを持つ読み取り系で、最大30個。レポートなどの用途ごとに計算資源を調整できます。両者とも同じ Page Server を共有します。[2]"
+    },
+    {
+      "kind": "paragraph",
+      "id": "24b34cb2-8351-4eaa-a02b-dec5b661d1ae",
+      "metadata": {},
+      "text": "Geo replica：同一または別リージョンに置ける、独立した Page Server を持つデータベースのコピーです。非同期レプリケーションにより追従し、別リージョン配置では災害復旧に利用できます。共有ストレージを使う Named replica とは障害分離の範囲が異なります。[2]"
+    },
+    {
+      "kind": "image",
+      "id": "ce7e6f13-1703-48cc-b00f-f96a0c97e004",
+      "metadata": {
+        "figureNumber": 4,
+        "author": "DocSymbi / AI-assisted",
+        "representation": "conceptual-diagram"
+      },
+      "file": {
+        "id": "1fd95401-b156-4717-8b2f-734be5c25ae0",
+        "fileName": "figure-4.svg",
+        "mimeType": "image/svg+xml",
+        "byteLength": 5452,
+        "width": 1000,
+        "height": 920,
+        "data": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjkyMCIgdmlld0JveD0iMCAwIDEwMDAgOTIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUgZGVzYyI+PHRpdGxlIGlkPSJ0aXRsZSI+5ZuzNO+8muiqreOBv+WPluOCiuWIhuaVo+OBqOWcsOWfn+manOWus+OBuOOBruWCmeOBiDwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPlJlZ2lvbiBB44GuUHJpbWFyeeODu0hB44O7TmFtZWTjga/lkIzjgZhQYWdlIFNlcnZlcuOCkuWFseacieOBmeOCi+OAglJlZ2lvbiBC44GuR2VvIHJlcGxpY2Hjga/ni6znq4vjgZfjgZ9QYWdlIFNlcnZlcuOBqFN0b3JhZ2XjgpLmjIHjgaHjgIHpnZ7lkIzmnJ/jg6zjg5fjg6rjgrHjg7zjgrfjg6fjg7Pjgafov73lvpPjgZnjgovjgII8L2Rlc2M+PGRlZnM+PG1hcmtlciBpZD0iZGF0YSIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTTAgMCBMMTAgNSBMMCAxMCBaIiBmaWxsPSIjMzE3NGI4Ii8+PC9tYXJrZXI+PG1hcmtlciBpZD0ibG9nIiB2aWV3Qm94PSIwIDAgMTAgMTAiIHJlZlg9IjkiIHJlZlk9IjUiIG1hcmtlcldpZHRoPSI4IiBtYXJrZXJIZWlnaHQ9IjgiIG9yaWVudD0iYXV0by1zdGFydC1yZXZlcnNlIj48cGF0aCBkPSJNMCAwIEwxMCA1IEwwIDEwIFoiIGZpbGw9IiNhYzY0MTgiLz48L21hcmtlcj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMDAiIGhlaWdodD0iOTIwIiByeD0iMTgiIGZpbGw9IndoaXRlIi8+PGcgZm9udC1mYW1pbHk9Ill1IEdvdGhpYywgTWVpcnlvLCBzYW5zLXNlcmlmIiBmaWxsPSIjMWMzNTQ1Ij48dGV4dCB4PSI0MCIgeT0iNDgiIGZvbnQtc2l6ZT0iMjgiIGZvbnQtd2VpZ2h0PSI3MDAiPjA0ICDoqq3jgb/lj5bjgorliIbmlaPjgajlnLDln5/pmpzlrrPjgbjjga7lgpnjgYg8L3RleHQ+PHRleHQgeD0iNDAiIHk9IjgzIiBmb250LXNpemU9IjE2IiBmaWxsPSIjNTI2ODc4Ij7jg6zjg5fjg6rjgqvmp4vmiJAgIC8gIOWFseacieOCueODiOODrOODvOOCuOOBqOeLrOeri+OCueODiOODrOODvOOCuOOBrumBleOBhDwvdGV4dD48cmVjdCB4PSIzMCIgeT0iMTU1IiB3aWR0aD0iNDQwIiBoZWlnaHQ9IjY3NSIgcng9IjE2IiBmaWxsPSIjZjVmOGZjIiBzdHJva2U9IiNiZGNmZTAiLz48cmVjdCB4PSI1NDAiIHk9IjE1NSIgd2lkdGg9IjQyMCIgaGVpZ2h0PSI2NzUiIHJ4PSIxNiIgZmlsbD0iI2YyZmFmNiIgc3Ryb2tlPSIjYmJkOWM5Ii8+PHRleHQgeD0iNTAiIHk9IjE4NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzUyNjg3OCI+UmVnaW9uIEE8L3RleHQ+PHRleHQgeD0iNTYwIiB5PSIxODQiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM1MjY4NzgiPlJlZ2lvbiBCPC90ZXh0PjxnIGlkPSJyZWxhdGlvbi0xIj48cGF0aCBkPSJNMTUwIDIwMCBWMTMwIEg3NTAgVjIwMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYWM2NDE4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjbG9nKSIgLz48dGV4dCB4PSI1MTAiIHk9IjExNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iI2FjNjQxOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPumdnuWQjOacn+ODrOODl+ODquOCseODvOOCt+ODp+ODszwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTIiPjxwYXRoIGQ9Ik0xNTAgMjg2IFYzMjAgSDUwIFY1OTMgSDcwIiBmaWxsPSJub25lIiBzdHJva2U9IiMzMTc0YjgiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNkYXRhKSIgLz48dGV4dCB4PSIxMjUiIHk9IjUyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzMxNzRiOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPuWFseacieOCueODiOODrOODvOOCuDwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTMiPjxwYXRoIGQ9Ik0zNTAgMjg2IFYzMjAgSDQ1MCBWNTkzIEg0MzAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjM4NSIgeT0iNTI1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+5YWx5pyJPC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tNCI+PHBhdGggZD0iTTI1MCA0NTYgVjU1MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIC8+PHRleHQgeD0iMzA1IiB5PSI1MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMzMTc0YjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7lhbHmnIk8L3RleHQ+PC9nPjxnIGlkPSJyZWxhdGlvbi01Ij48cGF0aCBkPSJNMjUwIDYzNiBWNzIwIiBmaWxsPSJub25lIiBzdHJva2U9IiMzMTc0YjgiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNkYXRhKSIgLz48dGV4dCB4PSIzMTAiIHk9IjY4NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzMxNzRiOCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHBhaW50LW9yZGVyPSJzdHJva2UiPuS/neWtmDwvdGV4dD48L2c+PGcgaWQ9InJlbGF0aW9uLTYiPjxwYXRoIGQ9Ik03NTAgMjg2IFY1NTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2RhdGEpIiAvPjx0ZXh0IHg9IjgzMCIgeT0iNDI1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMzE3NGI4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgcGFpbnQtb3JkZXI9InN0cm9rZSI+54us56uL44K544OI44Os44O844K4PC90ZXh0PjwvZz48ZyBpZD0icmVsYXRpb24tNyI+PHBhdGggZD0iTTc1MCA2MzYgVjcyMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjZGF0YSkiIC8+PHRleHQgeD0iODEwIiB5PSI2ODUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMzMTc0YjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBwYWludC1vcmRlcj0ic3Ryb2tlIj7kv53lrZg8L3RleHQ+PC9nPjxnIGlkPSJwcmltYXJ5Ij48cmVjdCB4PSI3MCIgeT0iMjAwIiB3aWR0aD0iMTYwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlYWYzZmYiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMTUwIiB5PSIyNTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjAiIGZvbnQtd2VpZ2h0PSI2MDAiPlByaW1hcnk8L3RleHQ+PC9nPjxnIGlkPSJoYSI+PHJlY3QgeD0iMjcwIiB5PSIyMDAiIHdpZHRoPSIxNjAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2VhZjNmZiIgc3Ryb2tlPSIjMzE3NGI4IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIzNTAiIHk9IjI1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMCIgZm9udC13ZWlnaHQ9IjYwMCI+SEEgcmVwbGljYTwvdGV4dD48L2c+PGcgaWQ9Im5hbWVkIj48cmVjdCB4PSI3MCIgeT0iMzcwIiB3aWR0aD0iMzYwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlYWYzZmYiIHN0cm9rZT0iIzMxNzRiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMjUwIiB5PSI0MjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPk5hbWVkIHJlcGxpY2E8L3RleHQ+PC9nPjxnIGlkPSJwYWdlc0EiPjxyZWN0IHg9IjcwIiB5PSI1NTAiIHdpZHRoPSIzNjAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2U3ZjVlZCIgc3Ryb2tlPSIjMjg3MjU0IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIyNTAiIHk9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+5YWx5pyJIFBhZ2UgU2VydmVycyBBPC90ZXh0PjwvZz48ZyBpZD0ic3RvcmFnZUEiPjxyZWN0IHg9IjcwIiB5PSI3MjAiIHdpZHRoPSIzNjAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2U3ZjVlZCIgc3Ryb2tlPSIjMjg3MjU0IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSIyNTAiIHk9Ijc3MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+U3RvcmFnZSBBPC90ZXh0PjwvZz48ZyBpZD0iZ2VvIj48cmVjdCB4PSI1ODAiIHk9IjIwMCIgd2lkdGg9IjM0MCIgaGVpZ2h0PSI4NiIgcng9IjE0IiBmaWxsPSIjZWFmM2ZmIiBzdHJva2U9IiMzMTc0YjgiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9Ijc1MCIgeT0iMjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjIzIiBmb250LXdlaWdodD0iNjAwIj5HZW8gcmVwbGljYTwvdGV4dD48L2c+PGcgaWQ9InBhZ2VzQiI+PHJlY3QgeD0iNTgwIiB5PSI1NTAiIHdpZHRoPSIzNDAiIGhlaWdodD0iODYiIHJ4PSIxNCIgZmlsbD0iI2U3ZjVlZCIgc3Ryb2tlPSIjMjg3MjU0IiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSI3NTAiIHk9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMyIgZm9udC13ZWlnaHQ9IjYwMCI+54us56uLIFBhZ2UgU2VydmVycyBCPC90ZXh0PjwvZz48ZyBpZD0ic3RvcmFnZUIiPjxyZWN0IHg9IjU4MCIgeT0iNzIwIiB3aWR0aD0iMzQwIiBoZWlnaHQ9Ijg2IiByeD0iMTQiIGZpbGw9IiNlN2Y1ZWQiIHN0cm9rZT0iIzI4NzI1NCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNzUwIiB5PSI3NzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjMiIGZvbnQtd2VpZ2h0PSI2MDAiPlN0b3JhZ2UgQjwvdGV4dD48L2c+PGxpbmUgeDE9IjQwIiB5MT0iODU1IiB4Mj0iOTYwIiB5Mj0iODU1IiBzdHJva2U9IiNkY2U1ZWIiLz48dGV4dCB4PSI0MCIgeT0iODgzIiBmb250LXNpemU9IjE1IiBmaWxsPSIjNTI2ODc4Ij7pnZLvvJrjg5rjg7zjgrjlj5blvpfjg7vliKnnlKjplqLkv4IgIOapme+8muODreOCsO+8j+ODrOODl+ODquOCseODvOOCt+ODp+ODsyAg57eR44Gu5p6g77ya5L+d5a2Y5bGkPC90ZXh0Pjx0ZXh0IHg9IjQwIiB5PSI5MDciIGZvbnQtc2l6ZT0iMTMiIGZpbGw9IiM2NTc4ODciPk1pY3Jvc29mdCBMZWFybiDjgavln7rjgaXjgY/mpoLlv7Xlm7MgwrcgMjAyNi0xMC0yNiDCtyDniannkIbphY3nva7jgoTlhpfplbflj7DmlbDjga/nnIHnlaU8L3RleHQ+PC9nPjwvc3ZnPg=="
+      },
+      "caption": "図4：読み取り分散と地域障害への備え",
+      "alt": "Region AのPrimary・HA・Namedは同じPage Serverを共有する。Region BのGeo replicaは独立したPage ServerとStorageを持ち、非同期レプリケーションで追従する。",
+      "semantics": {
+        "version": 1,
+        "purpose": "HA・Named replicaとGeo replicaの保存領域および障害分離の違いを理解する。",
+        "summary": "Region AのPrimary・HA・Namedは同じPage Serverを共有する。Region BのGeo replicaは独立したPage ServerとStorageを持ち、非同期レプリケーションで追従する。",
+        "entities": [
+          {
+            "id": "primary",
+            "label": "Primary",
+            "role": "Region Aの読み書きCompute。"
+          },
+          {
+            "id": "ha",
+            "label": "HA replica",
+            "role": "Region Aの待機系および読み取りCompute。"
+          },
+          {
+            "id": "named",
+            "label": "Named replica",
+            "role": "Region Aの独立したサービスレベルを持つ読み取りCompute。"
+          },
+          {
+            "id": "pagesA",
+            "label": "共有 Page Servers A",
+            "role": "Primary・HA・Namedが共有するページ保存層。"
+          },
+          {
+            "id": "storageA",
+            "label": "Storage A",
+            "role": "Region Aの永続保存領域。"
+          },
+          {
+            "id": "geo",
+            "label": "Geo replica",
+            "role": "Region Bに配置した非同期レプリカ。災害復旧用。"
+          },
+          {
+            "id": "pagesB",
+            "label": "独立 Page Servers B",
+            "role": "Primaryと共有しない、Geo専用のページ保存層。"
+          },
+          {
+            "id": "storageB",
+            "label": "Storage B",
+            "role": "Region Bの独立した永続保存領域。"
+          }
+        ],
+        "relationships": [
+          {
+            "from": "primary",
+            "to": "geo",
+            "meaning": "別リージョンのGeo replicaへ非同期レプリケーションする"
+          },
+          {
+            "from": "primary",
+            "to": "pagesA",
+            "meaning": "Primaryが共有Page Serverを利用する"
+          },
+          {
+            "from": "ha",
+            "to": "pagesA",
+            "meaning": "HAがPrimaryと同じPage Serverを利用する"
+          },
+          {
+            "from": "named",
+            "to": "pagesA",
+            "meaning": "NamedがPrimaryと同じPage Serverを利用する"
+          },
+          {
+            "from": "pagesA",
+            "to": "storageA",
+            "meaning": "Region Aの永続保存"
+          },
+          {
+            "from": "geo",
+            "to": "pagesB",
+            "meaning": "Geoが独立したPage Serverを利用する"
+          },
+          {
+            "from": "pagesB",
+            "to": "storageB",
+            "meaning": "Region Bの永続保存"
+          }
+        ],
+        "readingOrder": [
+          "primary",
+          "ha",
+          "named",
+          "pagesA",
+          "storageA",
+          "geo",
+          "pagesB",
+          "storageB"
+        ],
+        "assumptions": [
+          "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+          "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+          "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+          "Region A と Region B は例示の別リージョン。実際の地域名を指定していない。",
+          "ストレージへの接続線は共有／独立の関係を示す。Computeによるデータページ直接書き込みを意味しない。",
+          "Geo replicaは非同期のため、強制フェールオーバーでデータ損失が起こり得る。HAやNamedの追加だけで地域災害対策にはならない。",
+          "Log Serviceと詳細な内部冗長構成は省略。Namedは読み取り分散用で、PrimaryのHA待機系とは役割が異なる。"
+        ],
+        "sources": [
+          {
+            "title": "Microsoft Learn: Hyperscale secondary replicas",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/service-tier-hyperscale-replicas?view=azuresql",
+            "accessedAt": "2026-10-26"
+          },
+          {
+            "title": "Microsoft Learn: Hyperscale architecture",
+            "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+            "accessedAt": "2026-10-26"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "paragraph",
+      "id": "3b7edc85-7378-458d-9926-a4ba8c84c2ad",
+      "metadata": {},
+      "text": "設計上の考察：更新直後の値が必要な処理は Primary に接続し、遅延を許容する集計を読み取り系へ振り分けます。災害復旧では、非同期コピーの遅延を踏まえて RPO（許容データ損失時間）と RTO（復旧時間）を決め、接続の切り替えと再試行を含めて訓練します。これは [2] の特性から導く設計方針です。"
+    },
+    {
+      "kind": "heading",
+      "id": "f8323fff-94a8-4e22-93c9-67bb58322146",
+      "metadata": {},
+      "text": "4. バックアップと復元",
+      "level": 2
+    },
+    {
+      "kind": "paragraph",
+      "id": "3b147f3b-7a44-46b1-a3e1-90bc17bbc9bf",
+      "metadata": {},
+      "text": "バックアップはデータファイルのストレージスナップショットを基礎とし、保持したログを適用して指定時点へ復元します。同一リージョン・同じストレージ条件の復元はデータ全体のコピーを避けられます。一方、冗長性の変更や別リージョンへの復元はデータ量の影響を受けるため、「常に瞬時」とは見積もれません。[3]"
+    },
+    {
+      "kind": "paragraph",
+      "id": "c4b50687-3604-41a0-b15e-cf758fa7e12a",
+      "metadata": {},
+      "text": "短期保持は既定7日、設定可能範囲は1〜35日で、長期保持（LTR）にも対応します。データとバックアップに同じストレージ冗長性が適用されるため、作成時に LRS／ZRS／RA-GRS／RA-GZRS を選ぶ際は復旧要件も検討します。既存DBの設定をその場で変更する方式ではなく、必要に応じてコピー等を用います。[3]"
+    },
+    {
+      "kind": "heading",
+      "id": "43f41dfb-a8ec-4cc3-91cf-88be50c43e0a",
+      "metadata": {},
+      "text": "5. 性能を評価するときの観点",
+      "level": 2
+    },
+    {
+      "kind": "paragraph",
+      "id": "2378065a-19d2-47ae-9721-3ff4c62d94e9",
+      "metadata": {},
+      "text": "CPUだけでなく、キャッシュヒットと Page Server reads を確認します。リモートページ取得はローカルSSDより遅く、PAGEIOLATCH_* 待機にはページのログ適用待ちと転送時間が含まれます。Query Store や実行計画の ActualPageServerReads が調査に役立ちます。[4]"
+    },
+    {
+      "kind": "paragraph",
+      "id": "63914a51-e742-4fd3-8ece-912a62ac8553",
+      "metadata": {},
+      "text": "ログ適用が遅れると、Primary のログ生成が抑制されることがあります。RBIO_RG_STORAGE は Page Server、RBIO_RG_REPLICA は HA／Named replica のログ消費遅延を調べる手掛かりです。レプリカを増やすだけで更新処理が無制限に速くなるわけではありません。[4]"
+    },
+    {
+      "kind": "heading",
+      "id": "eacd501a-15eb-4159-a46e-8780dcb6d759",
+      "metadata": {},
+      "text": "6. 構成検討メモ",
+      "level": 2
+    },
+    {
+      "kind": "paragraph",
+      "id": "29992476-5383-4329-aebd-ddf94ad6af34",
+      "metadata": {},
+      "text": "以下は本資料からの設計上の考察です。①データ容量と増加率を見積もる。②更新系・参照系を分け、鮮度要件を明示する。③HA、ゾーン冗長、Geo replica、バックアップをそれぞれの障害・復旧目的で選ぶ。④コールドキャッシュやフェールオーバー後も含めて性能測定する。⑤計算資源、各レプリカ、データ／バックアップ保存量をコスト評価に含める。具体的なSKU・地域対応・価格は導入時に再確認します。"
+    },
+    {
+      "kind": "heading",
+      "id": "8228a529-663e-4b0d-a77c-767f238becc9",
+      "metadata": {},
+      "text": "7. 公式リファレンス",
+      "level": 2
+    },
+    {
+      "kind": "paragraph",
+      "id": "d091909a-793f-44da-8398-d158a56b752d",
+      "metadata": {},
+      "text": "[1] Microsoft Learn — Hyperscale distributed functions architecture\nhttps://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql"
+    },
+    {
+      "kind": "paragraph",
+      "id": "fd43a1f8-870e-4b1c-914e-a6d5926c000f",
+      "metadata": {},
+      "text": "[2] Microsoft Learn — Hyperscale secondary replicas\nhttps://learn.microsoft.com/en-us/azure/azure-sql/database/service-tier-hyperscale-replicas?view=azuresql"
+    },
+    {
+      "kind": "paragraph",
+      "id": "2825bf09-d5c1-45fe-86a9-d6245c4ca479",
+      "metadata": {},
+      "text": "[3] Microsoft Learn — Automated backups for Hyperscale databases\nhttps://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-automated-backups-overview?view=azuresql"
+    },
+    {
+      "kind": "paragraph",
+      "id": "a6a3f9ae-c9d8-45f6-b72c-9b16cf344a90",
+      "metadata": {},
+      "text": "[4] Microsoft Learn — SQL Hyperscale performance troubleshooting diagnostics\nhttps://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql"
+    },
+    {
+      "kind": "paragraph",
+      "id": "56aac0f2-f8fd-43ec-b5dd-0feee4051256",
+      "metadata": {},
+      "text": "対象は Azure SQL Database Hyperscale です。SQL Server on Azure VM や Azure SQL Managed Instance の構成とは区別してください。図中の矢印は論理的なデータの流れを表し、ネットワーク設定や物理的な冗長台数を表しません。"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "imageBlockId": "8e887197-3153-4a2a-9080-2a05063b98f1",
+  "imageFileId": "cefb0ee8-3e0e-44ae-a28f-469de8612cd1",
+  "fileName": "figure-2.svg",
+  "caption": "図2：必要なページを段階的に取得",
+  "alt": "メモリにないページをRBPEXで探し、そこにもなければPage Serverへ要求する。要求LSNに達するまで待機する場合があり、取得後はComputeでクエリを処理する。",
+  "semantics": {
+    "version": 1,
+    "purpose": "SELECT のページ取得がメモリ、ローカルSSD、Page Server を使い分けることを理解する。",
+    "summary": "メモリにないページをRBPEXで探し、そこにもなければPage Serverへ要求する。要求LSNに達するまで待機する場合があり、取得後はComputeでクエリを処理する。",
+    "entities": [
+      {
+        "id": "memory",
+        "label": "メモリ / Buffer Pool",
+        "role": "Compute上で必要なページを検索する。"
+      },
+      {
+        "id": "rbpex",
+        "label": "ローカルSSD / RBPEX",
+        "role": "メモリにないページをComputeのSSDキャッシュで検索する。"
+      },
+      {
+        "id": "pages",
+        "label": "Page Server",
+        "role": "キャッシュにないページを要求されたLSNで提供する。"
+      },
+      {
+        "id": "query",
+        "label": "Compute でクエリ処理",
+        "role": "取得したページを使ってSQLを処理する。"
+      },
+      {
+        "id": "result",
+        "label": "アプリへ結果を返す",
+        "role": "SQLの実行結果を返す。"
+      }
+    ],
+    "relationships": [
+      {
+        "from": "memory",
+        "to": "rbpex",
+        "meaning": "メモリにページがない場合"
+      },
+      {
+        "from": "rbpex",
+        "to": "pages",
+        "meaning": "RBPEXにページがない場合"
+      },
+      {
+        "from": "memory",
+        "to": "query",
+        "meaning": "メモリのページを利用する"
+      },
+      {
+        "from": "rbpex",
+        "to": "query",
+        "meaning": "RBPEXのページを利用する"
+      },
+      {
+        "from": "pages",
+        "to": "query",
+        "meaning": "要求LSNのページを受信する。追従が必要なら待機する"
+      },
+      {
+        "from": "query",
+        "to": "result",
+        "meaning": "クエリ処理の結果を返す"
+      }
+    ],
+    "readingOrder": [
+      "memory",
+      "rbpex",
+      "pages",
+      "query",
+      "result"
+    ],
+    "assumptions": [
+      "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+      "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+      "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+      "ページ取得の概念図であり、SQL実行計画や全I/Oの時系列を表すものではない。",
+      "結果生成はComputeのクエリ処理で行う。Page ServerがSQLを実行する意味ではない。"
+    ],
+    "sources": [
+      {
+        "title": "Microsoft Learn: Performance diagnostics",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql",
+        "accessedAt": "2026-10-26"
+      }
+    ]
+  }
+}

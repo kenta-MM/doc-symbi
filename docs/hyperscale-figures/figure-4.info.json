@@ -1,0 +1,122 @@
+{
+  "imageBlockId": "ce7e6f13-1703-48cc-b00f-f96a0c97e004",
+  "imageFileId": "1fd95401-b156-4717-8b2f-734be5c25ae0",
+  "fileName": "figure-4.svg",
+  "caption": "図4：読み取り分散と地域障害への備え",
+  "alt": "Region AのPrimary・HA・Namedは同じPage Serverを共有する。Region BのGeo replicaは独立したPage ServerとStorageを持ち、非同期レプリケーションで追従する。",
+  "semantics": {
+    "version": 1,
+    "purpose": "HA・Named replicaとGeo replicaの保存領域および障害分離の違いを理解する。",
+    "summary": "Region AのPrimary・HA・Namedは同じPage Serverを共有する。Region BのGeo replicaは独立したPage ServerとStorageを持ち、非同期レプリケーションで追従する。",
+    "entities": [
+      {
+        "id": "primary",
+        "label": "Primary",
+        "role": "Region Aの読み書きCompute。"
+      },
+      {
+        "id": "ha",
+        "label": "HA replica",
+        "role": "Region Aの待機系および読み取りCompute。"
+      },
+      {
+        "id": "named",
+        "label": "Named replica",
+        "role": "Region Aの独立したサービスレベルを持つ読み取りCompute。"
+      },
+      {
+        "id": "pagesA",
+        "label": "共有 Page Servers A",
+        "role": "Primary・HA・Namedが共有するページ保存層。"
+      },
+      {
+        "id": "storageA",
+        "label": "Storage A",
+        "role": "Region Aの永続保存領域。"
+      },
+      {
+        "id": "geo",
+        "label": "Geo replica",
+        "role": "Region Bに配置した非同期レプリカ。災害復旧用。"
+      },
+      {
+        "id": "pagesB",
+        "label": "独立 Page Servers B",
+        "role": "Primaryと共有しない、Geo専用のページ保存層。"
+      },
+      {
+        "id": "storageB",
+        "label": "Storage B",
+        "role": "Region Bの独立した永続保存領域。"
+      }
+    ],
+    "relationships": [
+      {
+        "from": "primary",
+        "to": "geo",
+        "meaning": "別リージョンのGeo replicaへ非同期レプリケーションする"
+      },
+      {
+        "from": "primary",
+        "to": "pagesA",
+        "meaning": "Primaryが共有Page Serverを利用する"
+      },
+      {
+        "from": "ha",
+        "to": "pagesA",
+        "meaning": "HAがPrimaryと同じPage Serverを利用する"
+      },
+      {
+        "from": "named",
+        "to": "pagesA",
+        "meaning": "NamedがPrimaryと同じPage Serverを利用する"
+      },
+      {
+        "from": "pagesA",
+        "to": "storageA",
+        "meaning": "Region Aの永続保存"
+      },
+      {
+        "from": "geo",
+        "to": "pagesB",
+        "meaning": "Geoが独立したPage Serverを利用する"
+      },
+      {
+        "from": "pagesB",
+        "to": "storageB",
+        "meaning": "Region Bの永続保存"
+      }
+    ],
+    "readingOrder": [
+      "primary",
+      "ha",
+      "named",
+      "pagesA",
+      "storageA",
+      "geo",
+      "pagesB",
+      "storageB"
+    ],
+    "assumptions": [
+      "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+      "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+      "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+      "Region A と Region B は例示の別リージョン。実際の地域名を指定していない。",
+      "ストレージへの接続線は共有／独立の関係を示す。Computeによるデータページ直接書き込みを意味しない。",
+      "Geo replicaは非同期のため、強制フェールオーバーでデータ損失が起こり得る。HAやNamedの追加だけで地域災害対策にはならない。",
+      "Log Serviceと詳細な内部冗長構成は省略。Namedは読み取り分散用で、PrimaryのHA待機系とは役割が異なる。"
+    ],
+    "sources": [
+      {
+        "title": "Microsoft Learn: Hyperscale secondary replicas",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/service-tier-hyperscale-replicas?view=azuresql",
+        "accessedAt": "2026-10-26"
+      },
+      {
+        "title": "Microsoft Learn: Hyperscale architecture",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+        "accessedAt": "2026-10-26"
+      }
+    ]
+  }
+}

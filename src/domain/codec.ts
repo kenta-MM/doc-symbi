@@ -14,7 +14,7 @@ export function deserialize(text: string): Document {
   let input: unknown;
   try { input = JSON.parse(text); } catch { throw new ImportError('InvalidJson', 'JSON を読み取れません'); }
   if (!input || typeof input !== 'object' || !('format' in input) || input.format !== 'docsymbi') throw new ImportError('InvalidFormat', 'DocSymbi 形式ではありません');
-  if (!('schemaVersion' in input) || input.schemaVersion !== 1) throw new ImportError('UnsupportedVersion', '未対応の文書バージョンです');
+  if (!('schemaVersion' in input) || ![1, 2].includes(input.schemaVersion as number)) throw new ImportError('UnsupportedVersion', '未対応の文書バージョンです');
   try { return validateDocument(input); }
   catch (error) {
     if (error instanceof ValidationError) throw new ImportError(error.code, error.message, error.path);

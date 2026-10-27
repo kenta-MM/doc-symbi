@@ -19,6 +19,7 @@ test('20 raw measurements of 1000-block / 100000-character editing', async ({ pa
     const start = await now(); await page.locator('.document-link').click();
     await expect(page.locator('.tiptap > *')).toHaveCount(1000);
     const display = await painted() - start;
+    await page.getByRole('button', { name: '編集', exact: true }).click();
     const navigationStart = await now(); await page.locator('.outline button').last().click();
     await expect(page.locator('.tiptap > h1, .tiptap > h2, .tiptap > h3, .tiptap > h4, .tiptap > h5, .tiptap > h6').last()).toBeInViewport();
     const navigation = await painted() - navigationStart;

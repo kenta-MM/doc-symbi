@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { metadataSchema } from './metadata';
 import { textSchema } from './text';
+import { imageFileSchema, imageSemanticsSchema } from './image';
 
 const identity = { id: z.uuid(), metadata: metadataSchema };
 export const paragraphSchema = z.strictObject({ ...identity, kind: z.literal('paragraph'), text: textSchema });
@@ -16,12 +17,14 @@ export const listSchema = z.strictObject({
   },
 });
 export const listItemSchema = listSchema.shape.items.element;
-export const blockSchema = z.discriminatedUnion('kind', [paragraphSchema, headingSchema, codeSchema, listSchema]);
+export const imageSchema = z.strictObject({ ...identity, kind: z.literal('image'), file: imageFileSchema, caption: textSchema, alt: textSchema, semantics: imageSemanticsSchema });
+export type ImageBlock = z.infer<typeof imageSchema>;
+export const blockSchema = z.discriminatedUnion('kind', [paragraphSchema, headingSchema, codeSchema, listSchema, imageSchema]);
 export const documentSchema = z.strictObject({
-  format: z.literal('docsymbi'), schemaVersion: z.literal(1), ...identity,
+  format: z.literal('docsymbi'), schemaVersion: z.union([z.literal(1), z.literal(2)]), ...identity,
   title: z.string().refine(value => value.trim().length > 0, '名前を入力してください'),
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), blocks: z.array(blockSchema).min(1),
-});
+}).refine(value => value.schemaVersion === 2 || !value.blocks.some(block => block.kind === 'image'), '画像を含む文書には schemaVersion 2 が必要です');
 export type Document = z.infer<typeof documentSchema>;
 export type Block = z.infer<typeof blockSchema>;
 export type List = z.infer<typeof listSchema>;

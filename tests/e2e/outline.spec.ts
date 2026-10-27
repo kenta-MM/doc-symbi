@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../helpers/folder-page';
 test('outline labels update and select the correct heading', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '新規作成', exact: true }).click();
   await page.getByRole('button', { name: '見出し', exact: true }).click();

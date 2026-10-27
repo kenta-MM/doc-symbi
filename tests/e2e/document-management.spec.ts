@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../helpers/folder-page';
 test('unsaved navigation cancellation and confirmed deletion target the correct document', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '新規作成', exact: true }).click();
   await page.locator('.tiptap').fill('保持する本文');

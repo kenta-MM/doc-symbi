@@ -13,7 +13,7 @@ export function createDocument(title: string, environment: DocumentEnvironment):
 export function editedDocument(document: Document, change: Partial<Pick<Document, 'title' | 'blocks'>>, clock: () => string): Document {
   const nextTime = clock();
   const updatedAt = Date.parse(nextTime) > Date.parse(document.updatedAt) ? nextTime : document.updatedAt;
-  return validateDocument({ ...document, ...change, updatedAt });
+  return validateDocument({ ...document, ...change, schemaVersion: (change.blocks ?? document.blocks).some(block => block.kind === 'image') ? 2 : document.schemaVersion, updatedAt });
 }
 
 export function renameDocument(document: Document, title: string, clock: () => string): Document {

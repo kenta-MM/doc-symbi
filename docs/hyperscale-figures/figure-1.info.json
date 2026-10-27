@@ -1,0 +1,130 @@
+{
+  "imageBlockId": "87b8a996-4fe9-48f5-9d2e-e43010671c25",
+  "imageFileId": "d15b1dca-11c8-4522-8816-d95258396e80",
+  "fileName": "figure-1.svg",
+  "caption": "図1：処理・ログ・保存の分離",
+  "alt": "Primary が更新を処理し、Log Service が変更ログをページサーバーと読み取りレプリカへ配布する。Compute は Page Server から必要なページを取得し、永続データは Azure Storage に保存される。",
+  "semantics": {
+    "version": 1,
+    "purpose": "Hyperscale の主要コンポーネントの責務と、ページ取得経路・ログ配布経路の違いを理解する。",
+    "summary": "Primary が更新を処理し、Log Service が変更ログをページサーバーと読み取りレプリカへ配布する。Compute は Page Server から必要なページを取得し、永続データは Azure Storage に保存される。",
+    "entities": [
+      {
+        "id": "app",
+        "label": "更新アプリ",
+        "role": "SQL の読み書きを Primary に要求する。"
+      },
+      {
+        "id": "readers",
+        "label": "参照アプリ",
+        "role": "読み取り処理をレプリカへ要求する。"
+      },
+      {
+        "id": "primary",
+        "label": "Primary Compute",
+        "role": "SQL・更新処理。メモリとRBPEXキャッシュを持つ。"
+      },
+      {
+        "id": "log",
+        "label": "Log Service",
+        "role": "更新ログの永続化と各コンポーネントへの配布。"
+      },
+      {
+        "id": "replicas",
+        "label": "HA / Named",
+        "role": "読み取り系Compute。共有ストレージを利用する。"
+      },
+      {
+        "id": "pages",
+        "label": "Page Servers",
+        "role": "ページを提供し、受信したログで担当データを更新する。"
+      },
+      {
+        "id": "storage",
+        "label": "Azure Storage",
+        "role": "データファイルとスナップショットを永続保存する。"
+      },
+      {
+        "id": "logs",
+        "label": "長期ログ保存",
+        "role": "復元に利用するトランザクションログを保持する。"
+      }
+    ],
+    "relationships": [
+      {
+        "from": "app",
+        "to": "primary",
+        "meaning": "SQL の読み書き要求"
+      },
+      {
+        "from": "readers",
+        "to": "replicas",
+        "meaning": "SQL の読み取り要求"
+      },
+      {
+        "from": "primary",
+        "to": "log",
+        "meaning": "更新ログの送信"
+      },
+      {
+        "from": "log",
+        "to": "replicas",
+        "meaning": "変更ログを配布する"
+      },
+      {
+        "from": "log",
+        "to": "pages",
+        "meaning": "ページ更新のためのログを配布する"
+      },
+      {
+        "from": "primary",
+        "to": "pages",
+        "meaning": "ページ要求と応答（キャッシュミス時）"
+      },
+      {
+        "from": "replicas",
+        "to": "pages",
+        "meaning": "読み取りレプリカのページ要求と応答"
+      },
+      {
+        "from": "pages",
+        "to": "storage",
+        "meaning": "データファイルを永続化する"
+      },
+      {
+        "from": "log",
+        "to": "logs",
+        "meaning": "ログを長期保存する"
+      }
+    ],
+    "readingOrder": [
+      "app",
+      "readers",
+      "primary",
+      "log",
+      "replicas",
+      "pages",
+      "storage",
+      "logs"
+    ],
+    "assumptions": [
+      "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+      "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+      "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+      "HA / Named は同じ保存領域を共有する。Geo replica はこの図には含めない。",
+      "Compute のメモリとローカルSSD（RBPEX）キャッシュをまとめて表示。読み取りではまずキャッシュを利用する。"
+    ],
+    "sources": [
+      {
+        "title": "Microsoft Learn: Hyperscale architecture",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+        "accessedAt": "2026-10-26"
+      },
+      {
+        "title": "Microsoft Learn: Performance diagnostics",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql",
+        "accessedAt": "2026-10-26"
+      }
+    ]
+  }
+}

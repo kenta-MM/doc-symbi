@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../helpers/folder-page';
 test('editing and saving require no external requests or document upload', async ({ page, context }) => {
   const unexpected: string[] = [];
   context.on('request', request => {

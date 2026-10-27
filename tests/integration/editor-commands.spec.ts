@@ -84,7 +84,14 @@ test('100 individual changes undo/redo without losing IDs or metadata', async ({
 });
 test('native list join rejects incompatible metadata without losing content or creating history', async ({ page }) => {
   await page.goto('/tests/harness.html');
-  await page.evaluate(() => { window.activeEditor = window.createEditorTest(1); });
+  await page.evaluate(() => {
+    window.activeEditor = window.createEditorTest(1);
+    const list = window.activeEditor.getDocument().blocks[3]!;
+    if (list.kind !== 'list') throw new Error('fixture');
+    // Join adjacent leaf items. With children on the preceding item, Backspace
+    // can legitimately reparent the following item without discarding metadata.
+    window.activeEditor.execute({ type: 'deleteListItem', id: list.items[0]!.children[0]!.items[0]!.id });
+  });
   const item = page.locator('.tiptap > ol > li').last().locator(':scope > p');
   await item.fill('結合候補');
   const before = await page.evaluate(() => window.activeEditor.getDocument());

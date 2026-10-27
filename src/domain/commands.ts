@@ -1,6 +1,7 @@
-import type { Block, ListItem } from './schema';
+import type { Block, ListItem, ImageBlock } from './schema';
 
 export type EditorCommand =
+  | { type: 'describeImage'; id: string; caption: string; alt: string; semantics: ImageBlock['semantics'] }
   | { type: 'replaceText'; id: string; text: string }
   | { type: 'insertBlock'; index: number; block: Block }
   | { type: 'deleteBlock'; id: string }

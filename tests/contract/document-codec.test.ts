@@ -12,7 +12,7 @@ test('typed failures distinguish syntax, format, version, structure and duplicat
   const base = documents[0]!;
   for (const [input, code] of [
     ['{', 'InvalidJson'], ['{}', 'InvalidFormat'],
-    [JSON.stringify({ ...base, schemaVersion: 2 }), 'UnsupportedVersion'],
+    [JSON.stringify({ ...base, schemaVersion: 3 }), 'UnsupportedVersion'],
     [JSON.stringify({ ...base, unknown: true }), 'InvalidStructure'],
     [JSON.stringify({ ...base, blocks: [base.blocks[0], base.blocks[0]] }), 'DuplicateElementId'],
   ]) {

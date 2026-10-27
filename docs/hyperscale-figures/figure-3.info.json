@@ -1,0 +1,99 @@
+{
+  "imageBlockId": "29bfdf36-ac20-4a6d-abc5-a53356bc6f32",
+  "imageFileId": "5c02e042-a004-43ec-b722-eda7c2ec8470",
+  "fileName": "figure-3.svg",
+  "caption": "図3：更新はログを通じて伝わる",
+  "alt": "Primary は Log Service にログを送る。ログは Log Service で永続化され、Page Server によるデータ更新、読み取りレプリカの非同期適用、長期ログ保存につながる。",
+  "semantics": {
+    "version": 1,
+    "purpose": "更新ログの永続化と、ページ／読み取りレプリカへの反映が別の役割であることを理解する。",
+    "summary": "Primary は Log Service にログを送る。ログは Log Service で永続化され、Page Server によるデータ更新、読み取りレプリカの非同期適用、長期ログ保存につながる。",
+    "entities": [
+      {
+        "id": "primary",
+        "label": "Primary Compute",
+        "role": "UPDATE等のトランザクションを処理する。"
+      },
+      {
+        "id": "log",
+        "label": "Log Service",
+        "role": "コミットに必要なログを永続化し、配布する。"
+      },
+      {
+        "id": "pages",
+        "label": "Page Servers",
+        "role": "担当するページにログを適用する。"
+      },
+      {
+        "id": "replica",
+        "label": "読み取りレプリカ",
+        "role": "ログを非同期に適用する。反映遅延があり得る。"
+      },
+      {
+        "id": "logs",
+        "label": "長期ログ保存",
+        "role": "バックアップ保持期間内の復元に利用する。"
+      },
+      {
+        "id": "data",
+        "label": "データファイル",
+        "role": "Page Serverが更新する永続データ。"
+      }
+    ],
+    "relationships": [
+      {
+        "from": "primary",
+        "to": "log",
+        "meaning": "更新ログを送信する"
+      },
+      {
+        "from": "log",
+        "to": "pages",
+        "meaning": "担当ページの更新に必要なログを配布する"
+      },
+      {
+        "from": "log",
+        "to": "replica",
+        "meaning": "読み取りレプリカへログを非同期に適用する"
+      },
+      {
+        "from": "log",
+        "to": "logs",
+        "meaning": "ログを長期保存へ送る"
+      },
+      {
+        "from": "pages",
+        "to": "data",
+        "meaning": "ログに従ってデータファイルを更新する"
+      }
+    ],
+    "readingOrder": [
+      "primary",
+      "log",
+      "pages",
+      "replica",
+      "logs",
+      "data"
+    ],
+    "assumptions": [
+      "論理構成の概念図。物理配置・内部冗長台数・ネットワーク設定を表さない。",
+      "矢印は relationships の from から to の向き。双方向矢印は要求と応答の往復を表す。",
+      "記載した事実は参照日時点の Microsoft Learn に基づく。サービス上限・対応地域は導入時に再確認する。",
+      "矢印の分岐は各コンポーネントへの伝播を表し、完了時刻の同一性を保証しない。",
+      "コミット時の永続化先はLog Service。すべての読み取りレプリカへの適用完了を意味しない。",
+      "Primary が Page Server へデータページを直接書き込む方式ではない。"
+    ],
+    "sources": [
+      {
+        "title": "Microsoft Learn: Hyperscale architecture",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+        "accessedAt": "2026-10-26"
+      },
+      {
+        "title": "Microsoft Learn: Performance diagnostics",
+        "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-performance-diagnostics?view=azuresql",
+        "accessedAt": "2026-10-26"
+      }
+    ]
+  }
+}

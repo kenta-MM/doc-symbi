@@ -17,6 +17,7 @@ function encodeItem(item: ListItem): JSONContent {
 export function encodeBlock(block: Block): JSONContent {
   const attrs = { id: block.id, metadata: block.metadata };
   switch (block.kind) {
+    case 'image': return { type: 'imageBlock', attrs: { ...attrs, file: block.file, caption: block.caption, alt: block.alt, semantics: block.semantics } };
     case 'list': return { type: block.style === 'bullet' ? 'bulletList' : 'orderedList', attrs, content: block.items.map(encodeItem) };
     case 'heading': return { type: 'heading', attrs: { ...attrs, level: block.level }, content: inline(block.text) };
     case 'code': return { type: 'codeBlock', attrs, content: inline(block.text, true) };
@@ -47,9 +48,13 @@ function textContent(node: JSONContent, code = false): string {
 }
 function decodeBlock(input: unknown): unknown {
   const node = checkedNode(input);
-  const attributes = attrs(node, node.type === 'heading' ? ['level'] : []);
+  const attributes = attrs(node, node.type === 'heading' ? ['level'] : node.type === 'imageBlock' ? ['file', 'caption', 'alt', 'semantics'] : []);
   const common = { id: attributes.id, metadata: attributes.metadata };
   if (node.text !== undefined) throw new Error('Text belongs to inline nodes');
+  if (node.type === 'imageBlock') {
+    if (node.content?.length) throw new Error('Image cannot contain editor nodes');
+    return { ...common, kind: 'image', file: attributes.file, caption: attributes.caption, alt: attributes.alt, semantics: attributes.semantics };
+  }
   if (node.type === 'paragraph' || node.type === 'heading' || node.type === 'codeBlock') {
     return { ...common, kind: node.type === 'codeBlock' ? 'code' : node.type, text: textContent(node, node.type === 'codeBlock'),
       ...(node.type === 'heading' ? { level: attributes.level } : {}) };
@@ -74,6 +79,7 @@ function decodeBlock(input: unknown): unknown {
 export function fromEditor(input: unknown, envelope: Document): Document {
   const body = checkedNode(input);
   if (body.type !== 'doc' || body.attrs || body.text !== undefined) throw new Error('Invalid editor document');
-  return validateDocument({ ...envelope, blocks: (body.content ?? []).map(decodeBlock) });
+  const blocks = (body.content ?? []).map(decodeBlock);
+  return validateDocument({ ...envelope, schemaVersion: body.content?.some(node => node.type === 'imageBlock') ? 2 : envelope.schemaVersion, blocks });
 }
 export type { List };

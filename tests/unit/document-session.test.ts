@@ -48,3 +48,19 @@ test('deleted document is never recreated by stale save', async () => {
   await expect(session.save()).rejects.toHaveProperty('code', 'NotFound');
   expect(await repository.list()).toEqual([]);
 });
+
+test('automatic resume never overwrites a draft created while the read is pending', async () => {
+  const repository = new MemoryRepository();
+  const session = new DocumentSession(repository, { id: fixedIds(), clock: () => fixedTime });
+  session.create('saved'); await session.save();
+  const stored = await repository.get(session.state.document!.id);
+  session.close();
+  let release!: () => void;
+  repository.get = () => new Promise(resolve => { release = () => resolve(stored); });
+  const loading = session.load(stored.document.id, session.state);
+  await Promise.resolve();
+  session.create('new draft');
+  release(); await loading;
+  expect(session.state.document!.title).toBe('new draft');
+  expect(session.state.dirty).toBe(true);
+});

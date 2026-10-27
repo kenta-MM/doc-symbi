@@ -3,6 +3,7 @@ import DocumentNode from '@tiptap/extension-document';
 import Text from '@tiptap/extension-text';
 import HardBreak from '@tiptap/extension-hard-break';
 import { BulletList, OrderedList, ListItem } from '@tiptap/extension-list';
+import { imageFileSchema, imageSource } from '../domain/image';
 
 const identity = () => ({ id: { default: null, rendered: false }, metadata: { default: {}, rendered: false } });
 const Paragraph = Node.create({
@@ -20,7 +21,15 @@ const Code = Node.create({
   addAttributes: identity, parseHTML: () => [{ tag: 'pre', preserveWhitespace: 'full' }], renderHTML: () => ['pre', ['code', 0]],
   addKeyboardShortcuts() { return { Enter: () => this.editor.isActive('codeBlock') && this.editor.commands.insertContent('\n') }; },
 });
-export const editorNodes = [DocumentNode, Text, HardBreak, Paragraph, Heading, Code,
+const ImageBlock = Node.create({
+  name: 'imageBlock', group: 'block', atom: true, draggable: true,
+  addAttributes: () => ({ ...identity(), file: { default: null, rendered: false }, caption: { default: '', rendered: false }, alt: { default: '', rendered: false }, semantics: { default: null, rendered: false } }),
+  // SVG is only ever loaded as an image; never inject markup or use object/iframe.
+  renderHTML: ({ node }) => ['figure', { class: 'attached-image' },
+    ['img', { src: imageSource(imageFileSchema.parse(node.attrs.file)), alt: String(node.attrs.alt), draggable: 'false' }],
+    ['figcaption', {}, String(node.attrs.caption)]],
+});
+export const editorNodes = [DocumentNode, Text, HardBreak, Paragraph, Heading, Code, ImageBlock,
   BulletList.extend({ addAttributes: identity, addInputRules: () => [] }),
   OrderedList.extend({ addAttributes: identity, renderHTML: () => ['ol', 0], addInputRules: () => [] }),
   ListItem.extend({ content: 'paragraph (bulletList | orderedList)*', addAttributes: identity }),

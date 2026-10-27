@@ -6,8 +6,10 @@ export type { EditorCommand } from '../../domain/commands';
 /** The implementation owns its host element; DOM and editor position types stay inside. */
 export interface EditorPort {
   mount(document: Document): void;
+  setEditable(editable: boolean): void;
   execute(command: EditorCommand, environment: DocumentEnvironment): void;
   focusHeading(id: string): void;
+  applyHeading(): void;
   undo(): void;
   redo(): void;
   readonly canUndo: boolean;

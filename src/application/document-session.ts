@@ -29,9 +29,11 @@ export class DocumentSession {
     if (this.pending) throw new Error('保存の完了を待ってください');
     this.update({ document: null, baseRevision: null, savedSnapshot: null, generation: 0, dirty: false, saveState: 'unsaved', error: null });
   }
-  async load(id: string): Promise<void> {
+  async load(id: string, expectedState?: SessionState): Promise<void> {
     await this.queue;
+    if (expectedState && this.state !== expectedState) return;
     const stored = await this.repository.get(id);
+    if (expectedState && this.state !== expectedState) return;
     this.update({ document: stored.document, baseRevision: stored.revision, savedSnapshot: structuredClone(stored.document), generation: 0, dirty: false, saveState: 'saved', error: null });
   }
   accept(document: Document): void {

@@ -12,11 +12,12 @@ import { toEditor, fromEditor } from './adapter';
 import { assignIdentity } from './identity';
 import { plainTextPaste } from './input';
 import { executeCommand } from './transaction-bridge';
+import { applyHeading } from './apply-heading';
 
 function textElements(document: Document): { id: string; text: string; metadata: Metadata }[] {
   const result: { id: string; text: string; metadata: Metadata }[] = [];
   const visitList = (list: List) => { for (const item of list.items) { result.push(item); item.children.forEach(visitList); } };
-  for (const block of document.blocks) { if (block.kind === 'list') visitList(block); else result.push(block); }
+  for (const block of document.blocks) { if (block.kind === 'list') visitList(block); else if (block.kind !== 'image') result.push(block); }
   return result;
 }
 
@@ -41,6 +42,7 @@ export class EditorController implements EditorPort {
     editor.view.setProps({ dispatchTransaction: transaction => {
       try {
         if (transaction.docChanged) {
+          if (!editor.isEditable) return;
           assignIdentity(transaction, this.environment.id);
           const before = this.current();
           const candidate = fromEditor(transaction.doc.toJSON(), before);
@@ -68,6 +70,7 @@ export class EditorController implements EditorPort {
   }
   execute(command: EditorCommand, environment: DocumentEnvironment): void {
     if (!this.editor) throw new Error('Editor is not mounted');
+    if (!this.editor.isEditable) return;
     executeCommand(this.editor, this.current(), command, environment);
   }
   focusHeading(id: string): void {
@@ -75,8 +78,13 @@ export class EditorController implements EditorPort {
     if (!editor) return;
     focusHeading(editor, id);
   }
-  undo(): void { this.editor?.commands.undo(); }
-  redo(): void { this.editor?.commands.redo(); }
+  setEditable(editable: boolean): void {
+    this.editor?.setEditable(editable, false);
+    this.editor?.view.dom.setAttribute('aria-readonly', String(!editable));
+  }
+  applyHeading(): void { if (this.editor?.isEditable) applyHeading(this.editor); }
+  undo(): void { if (this.editor?.isEditable) this.editor.commands.undo(); }
+  redo(): void { if (this.editor?.isEditable) this.editor.commands.redo(); }
   get canUndo(): boolean { return this.editor?.can().undo() ?? false; }
   get canRedo(): boolean { return this.editor?.can().redo() ?? false; }
   onAcceptedChange(listener: (document: Document) => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }

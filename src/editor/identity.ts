@@ -3,7 +3,7 @@ import type { Transaction } from '@tiptap/pm/state';
 export function assignIdentity(transaction: Transaction, newId: () => string): void {
   const seen = new Set<string>();
   transaction.doc.descendants((node, position, parent) => {
-    if (!['paragraph', 'heading', 'codeBlock', 'bulletList', 'orderedList', 'listItem'].includes(node.type.name)) return;
+    if (!['paragraph', 'heading', 'codeBlock', 'bulletList', 'orderedList', 'listItem', 'imageBlock'].includes(node.type.name)) return;
     if (node.type.name === 'paragraph' && parent?.type.name === 'listItem') {
       if (node.attrs.id !== null || Object.keys(node.attrs.metadata as object).length) transaction.setNodeMarkup(position, undefined, { ...node.attrs, id: null, metadata: {} });
       return;

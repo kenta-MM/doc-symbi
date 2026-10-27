@@ -11,5 +11,5 @@ export function HistoryToolbar({ editor }: { editor: EditorPort | null }) {
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [editor]);
-  return <div className="history-tools"><button disabled={!editor?.canUndo} onClick={() => editor?.undo()}>元に戻す</button><button disabled={!editor?.canRedo} onClick={() => editor?.redo()}>やり直す</button><span className="muted">Ctrl+S で保存</span></div>;
+  return <div className="history-tools"><span className="muted">Ctrl+S で保存</span></div>;
 }

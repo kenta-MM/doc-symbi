@@ -37,7 +37,7 @@ export function CreationMenu({ target, root, close, choose, manage, refresh, bus
   }}><p>{target.source}</p><small>{target.kind === 'file' ? '保存先' : '作成先'}: {target.folder === null ? '選択してください' : `${root}/${target.folder}`}</small>
     {target.kind !== 'file' && <><button role="menuitem" onClick={() => choose('folder')}>フォルダを作成</button><button role="menuitem" onClick={() => choose('document')}>ドキュメントを作成</button></>}
     {target.kind && <><button role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('rename')}>{target.kind === 'file' ? 'ファイル名を変更' : 'フォルダ名を変更'}</button><button role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('delete')}>{target.kind === 'file' ? 'ファイルを削除' : 'フォルダを削除'}</button></>}
-    {target.refresh && <button role="menuitem" disabled={busy} onClick={refresh}>更新</button>}
+    {target.refresh && <button role="menuitem" disabled={busy} onClick={refresh}>同期・再接続</button>}
     {target.kind === 'folder' && !target.folder && <small>保存先ルートの名前変更・削除はできません。</small>}
   </div>;
 }

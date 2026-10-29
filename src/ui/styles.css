@@ -90,3 +90,56 @@
 .quiz-option{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid #dce3df;border-radius:8px;margin:10px 0;cursor:pointer}.quiz-option:has(input:checked){border-color:#348264;background:#f0f7f3}.quiz-option input{margin-top:6px;flex-shrink:0;accent-color:#348264}.quiz-option span{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
 .quiz-feedback{padding:14px 16px;margin-top:18px;background:#f4f6f5;border-radius:8px;border-left:4px solid #a45a43}.quiz-feedback.correct{border-color:#348264}.quiz-feedback p{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}.quiz-navigation{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.quiz-navigation button{font-size:14px;padding:8px 14px}
 .quiz-settings-question{border:1px solid var(--line);border-radius:8px;margin:16px 0;padding:16px;min-width:0}.quiz-settings-question label{display:block;font-size:13px;margin:12px 0}.quiz-settings-question input,.quiz-settings-question textarea,.quiz-settings-question select{display:block;width:100%;margin-top:6px}.quiz-settings-question textarea{min-height:80px}.quiz-settings-question button{font-size:12px}
+/* The library starts immediately below the 50px header. */
+.library-workspace{min-height:calc(100vh - 50px)}
+
+.folder-heading .folder-sync{display:inline-flex;align-items:center;justify-content:center;margin-right:auto;margin-left:8px}
+.folder-sync .ui-icon{width:16px;height:16px}
+.folder-sync[aria-busy="true"] .ui-icon{animation:folder-sync-spin 1s linear infinite}
+@keyframes folder-sync-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.folder-sync[aria-busy="true"] .ui-icon{animation:none}}
+
+/* Compact folder and document lists. */
+.library-sidebar{padding:14px 12px}
+.folder-heading{margin-bottom:10px}
+.library-sidebar .folder-heading h2{font-size:16px}
+.folder-heading button{font-size:20px}
+.folder-tree .folder-row{min-height:32px;margin-bottom:2px;border-radius:6px}
+.library-sidebar .folder-tree .folder-row>.folder-select{min-height:32px;padding-top:5px;padding-bottom:5px;gap:6px;font-size:12px;line-height:1.5;border-radius:6px}
+.library-sidebar .folder-tree .folder-select>span{font-size:12px;line-height:1.5}
+.library-sidebar .folder-tree .tree-document>span{font-size:11px}
+.folder-chevron,.folder-select .ui-icon{width:16px;height:16px;flex-basis:16px}
+.library-workspace .document-main{padding:18px 22px 36px}
+.catalog h2{font-size:21px;margin-bottom:16px}
+.catalog-search{gap:8px}
+.catalog input,.catalog select{padding:7px 9px;font-size:12px}
+.catalog-filters{gap:8px;margin:10px 0;font-size:11px}
+.catalog-filters select{padding:5px 7px}
+.catalog-count{font-size:12px;margin-bottom:10px}
+.catalog-table td,.catalog-table th{padding:8px 10px;font-size:11px;line-height:1.5}
+.catalog-table .document-link,.catalog-table .document-link strong{font-size:12px;line-height:1.5}
+.catalog-table .tag,.catalog-table .type-badge{font-size:10px;padding:2px 5px;margin:1px}
+@media(max-width:700px){.library-workspace .document-main{padding:16px 12px 28px}}
+.library-workspace{grid-template-columns:min(var(--folder-width,240px),50vw) minmax(0,1fr)}
+.library-sidebar{position:relative}
+.sidebar-resize-handle{position:absolute;top:0;bottom:0;right:-4px;width:8px;z-index:2;cursor:col-resize;touch-action:none;user-select:none}
+.sidebar-resize-handle:hover,.sidebar-resize-handle.dragging,.sidebar-resize-handle:focus-visible{background:#34826455}
+.sidebar-resize-handle:focus-visible{outline:2px solid #348264;outline-offset:-2px}
+.library-workspace:has(.sidebar-resize-handle.dragging){user-select:none;cursor:col-resize}
+@media(max-width:700px){.sidebar-resize-handle{display:none}}
+
+/* Keep library chrome fixed while the two lists scroll independently. */
+.app-shell:has(.library-workspace){height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.app-shell:has(.library-workspace)>.app-header,.app-shell:has(.library-workspace)>.app-footer,.app-shell:has(.library-workspace)>.storage-warning{flex-shrink:0}
+.app-shell .library-workspace{flex:1;min-height:0;overflow:hidden}
+.library-workspace .library-sidebar{display:flex;flex-direction:column;min-height:0;max-height:none;overflow:hidden}
+.library-sidebar .folder-heading{flex-shrink:0}
+.library-sidebar .folder-tree{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.library-sidebar .sidebar-resize-handle{right:0}
+.library-workspace .document-main{min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.library-workspace .catalog{flex:1;min-height:0;display:flex;flex-direction:column}
+.library-workspace .catalog>*{flex-shrink:0}
+.library-workspace .catalog .catalog-table{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.library-workspace .catalog-table th{position:sticky;top:0;z-index:1}
+.library-workspace .new-document{overflow:auto;width:100%}
+@media(max-width:700px){.app-shell .library-workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(100px,30%) minmax(0,1fr)}}

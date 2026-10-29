@@ -1,8 +1,11 @@
+import { SidebarResizeHandle } from './SidebarResizeHandle';
 import type { DocumentSummary } from '../application/ports/document-repository';
 import { creationEvents, type OpenCreationMenu } from './CreationMenu';
 import { Icon } from './Icon';
 import { useState, type ReactNode } from 'react';
-export function FolderNavigation({ folders, documents, open, selected, select, rootName, menu }: {
+export function FolderNavigation({ folders, documents, open, selected, select, rootName, menu, synchronize, busy, width, resize }: {
+  width: number; resize: (width: number) => void;
+  synchronize: () => void; busy: boolean;
   documents: DocumentSummary[]; open: (id: string) => void;
   rootName: string; menu: OpenCreationMenu;
   folders: string[]; selected: string; select: (path: string) => void;
@@ -15,6 +18,9 @@ export function FolderNavigation({ folders, documents, open, selected, select, r
   }
   function toggle(path: string) {
     if (path !== selected) { select(path); return; }
+    toggleExpanded(path);
+  }
+  function toggleExpanded(path: string) {
     setCollapsed(previous => { const next = new Set(previous); if (next.has(path)) next.delete(path); else next.add(path); return next; });
   }
   function renderFolder(path: string): ReactNode {
@@ -24,8 +30,10 @@ export function FolderNavigation({ folders, documents, open, selected, select, r
     const files = documents.filter(item => (item.folderPath ?? '') === path).sort((a, b) => a.title.localeCompare(b.title, 'ja'));
     return <div key={path}>
       <div className={`folder-row${selected === path ? ' selected' : ''}`} {...creationEvents(menu, path, path || rootName, 'folder')}>
-        <button className="folder-select" style={{ paddingLeft: 8 + depth * 20 }} title={path || rootName} aria-label={`▱ ${name}`} aria-expanded={!collapsed.has(path)} aria-current={selected === path ? 'page' : undefined} onClick={() => toggle(path)}>
+        <button className="folder-toggle" style={{ marginLeft: 4 + depth * 20 }} aria-label={`${name}を${collapsed.has(path) ? '展開' : '折りたたむ'}`} aria-expanded={!collapsed.has(path)} onClick={() => toggleExpanded(path)}>
           <svg className="folder-chevron" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed.has(path) ? 'M8 5l5 5-5 5' : 'M5 8l5 5 5-5'} /></svg>
+        </button>
+        <button className="folder-select" title={path || rootName} aria-label={`▱ ${name}`} aria-expanded={!collapsed.has(path)} aria-current={selected === path ? 'page' : undefined} onClick={() => toggle(path)}>
           <Icon name="folder" /><span>{name}</span>
         </button>
       </div>
@@ -35,7 +43,8 @@ export function FolderNavigation({ folders, documents, open, selected, select, r
     </div>;
   }
   return <aside className="document-sidebar library-sidebar">
-    <div className="folder-heading"><h2>フォルダ</h2><button aria-label="選択中のフォルダの作成メニュー" onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); menu({ refresh: true, kind: 'folder', folder: selected, source: selected || rootName, x: rect.left, y: rect.bottom }); }}>⋯</button></div>
+    <div className="folder-heading"><h2>フォルダ</h2><button className="folder-sync" aria-label="フォルダを同期・再接続" title="フォルダを同期・再接続" disabled={busy} aria-busy={busy} onClick={synchronize}><Icon name="refresh" /></button><button aria-label="選択中のフォルダの作成メニュー" onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); menu({ refresh: true, kind: 'folder', folder: selected, source: selected || rootName, x: rect.left, y: rect.bottom }); }}>⋯</button></div>
     <nav aria-label="フォルダ階層" className="folder-tree" tabIndex={0} {...creationEvents(menu, selected, 'フォルダツリーの空白')}>{renderFolder('')}</nav>
+    <SidebarResizeHandle width={width} resize={resize} />
   </aside>;
 }

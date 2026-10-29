@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+import { registerOffline } from '../offline/register';
 import { renameDocument } from '../domain/document';
 import { CreationMenu, type CreationTarget } from './CreationMenu';
 import { pathParts } from '../domain/catalog';
@@ -16,9 +18,6 @@ import { DocumentDialog } from './DocumentDialogs';
 import { useUnsavedWarning } from './use-unsaved-warning';
 import { requiresNavigationGuard, resolveNavigation } from '../application/navigation-guard';
 import { deleteCurrentDocument } from '../application/document-management';
-import { FileTransfer } from './FileTransfer';
-import { StorageStatus } from './StorageStatus';
-import { OfflineStatus } from './OfflineStatus';
 import { Outline } from './Outline';
 import { HistoryToolbar } from './HistoryToolbar';
 import type { FolderStorage } from '../application/ports/folder-storage';
@@ -26,6 +25,8 @@ import { Icon } from './Icon';
 
 export function App({ session, createEditor, storage }: { session: DocumentSession; createEditor: (host: HTMLElement) => EditorPort; storage?: FolderStorage }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  useEffect(() => registerOffline(() => {}).dispose, []);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
   const [menu, setMenu] = useState<CreationTarget | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [destinationChoice, setDestinationChoice] = useState<'document' | 'folder' | null>(null);
@@ -137,19 +138,20 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     window.addEventListener('hashchange', hash); window.addEventListener('click', click);
     return () => { window.removeEventListener('hashchange', hash); window.removeEventListener('click', click); };
   });
-  async function chooseFolder() {
-    if (!storage) return;
-    const changingFolder = storage.name !== null;
-    setStorageBusy(true);
+  async function synchronizeFolders() {
+    if (storageBusy || !storageReady) return;
+    setMenu(null); setStorageBusy(true);
     try {
-      await storage.choose();
-      // Initial selection must keep the draft that needs a save destination.
-      if (changingFolder || session.state.baseRevision !== null) session.close();
-      setCreating(false); setSelectedFolder('');
-      setFolder(storage.name); setDocuments([]);
-      await resume(); setError(''); setNotice('');
-    } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) report(error); }
-    finally { setStorageBusy(false); }
+      if (storage) {
+        if (storage.name) await storage.reconnect();
+        else await storage.choose();
+        setFolder(storage.name);
+      }
+      await refresh();
+      setError(''); setNotice('');
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) report(error);
+    } finally { setStorageBusy(false); }
   }
   function beginCreation(kind: 'document' | 'folder', path: string | null) {
     setMenu(null);
@@ -164,25 +166,11 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         session.close(); setEditingId(null); setCreating(false); setSelectedFolder(''); setTagFilter(''); setMenu(null); setCatalogVersion(version => version + 1);
       })}>DocSymbi</button></h1><span className="tagline">構造から、伝わるドキュメントへ。</span></div>
       <div className="header-actions"><button className="icon-button" aria-label="使い方" onClick={() => setHelp(true)}><Icon name="help" /></button><button className="primary" disabled={storageBusy || !storageReady} onClick={() => beginCreation('document', selectedFolder)}>新規作成</button></div></header>
-    <div className="workspace-toolbar">
-    {storage && <div className="storage-status" aria-label="記事の保存先">
-      <button disabled={!storageReady || storageBusy || state.saveState === 'saving' || !storage.supported} onClick={() => {
-        if (storage.name || session.state.document) navigate(chooseFolder);
-        else void chooseFolder();
-      }}><Icon name="folder" />{folder ? '保存フォルダーを変更' : '保存フォルダーを選択'}</button>
-      {folder && <><button disabled={storageBusy} onClick={() => {
-        setStorageBusy(true);
-        void storage.reconnect().then(refresh).then(() => setError('')).catch(report).finally(() => setStorageBusy(false));
-      }}><Icon name="refresh" />保存先に再接続</button>
-        <button disabled={storageBusy || state.saveState === 'saving'} onClick={() => {
-          setStorageBusy(true);
-          void storage.migrate().then(async count => { await refresh(); setNotice(`${count}件をコピーしました。同じIDの記事はスキップし、ブラウザ内の元データは保持します。`); }).catch(report).finally(() => setStorageBusy(false));
-        }}><Icon name="file" />ブラウザ内の記事をコピー</button></>}
-    </div>}
+    {state.document && <div className="workspace-toolbar">
     {state.document && <div className="document-heading">{editable && <input aria-label="文書名" title={title} value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { if (!editable) return; try { session.rename(title); } catch (error) { report(error); setTitle(state.document!.title); } }} />}
       <div className="document-actions"><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button onClick={() => setDeleting(true)}>文書を削除</button>}</div>
     </div>}
-    </div>
+    </div>}
     {storage && !storage.supported && <p className="storage-warning">フォルダー保存にはデスクトップ版ChromeまたはEdgeを使用してください。</p>}
     {notice && <p className="storage-warning" role="status">{notice}</p>}
     {storage?.warning && <p className="storage-warning" role="note">{storage.warning}</p>}
@@ -191,9 +179,9 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       {(documents.find(row => row.id === state.document!.id)?.folderPath ?? '').split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button onClick={() => navigate(() => { session.close(); setSelectedFolder(parts.slice(0, index + 1).join('/')); })}>{part}</button></span>)}
       <span> / {title}</span><button className="information-toggle" aria-expanded={information} onClick={() => setInformation(!information)}>{information ? '情報を閉じる' : 'ドキュメント情報'}</button>
     </nav>}
-    <div className={`workspace ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
+    <div style={{ '--folder-width': `${sidebarWidth}px` } as CSSProperties} className={`workspace ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
       {state.document ? <aside className="document-sidebar outline-sidebar"><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></aside> :
-      <FolderNavigation documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
+      <FolderNavigation width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
       <main className="document-main">
       {(error || state.error) && <div role="alert" className="error-banner">{error || state.error?.message}{state.document && state.saveState === 'error' && <button onClick={() => void save()}>保存を再試行</button>}</div>}
       {creating && !folder && <p className="storage-warning">保存先フォルダが未設定のため、ドキュメントはブラウザ内に保存します。実ディレクトリに保存するには保存フォルダーを選択してください。</p>}
@@ -216,7 +204,6 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         }} />}</div>
       </>}
     </main></div>
-    <footer className="app-footer"><FileTransfer editable={editable} loaded={() => { setEditingId(null); setCreating(false); }} session={session} navigate={navigate} refreshed={refresh} report={report} />{!storage && <StorageStatus />}<OfflineStatus updateSafely={update => navigate(() => { session.close(); update(); })} /></footer>
     {folderAction && <DocumentDialog label="フォルダ操作" close={() => { if (!folderBusy) setFolderAction(null); }}><h2>{folderAction === 'create' ? 'フォルダ作成' : folderAction === 'rename' ? 'フォルダ名を変更' : 'フォルダを削除'}</h2>
       <p>対象: {folder ?? 'ルート'}/{folderTarget}</p>{folderAction === 'delete' ? <p>このフォルダと配下のすべてのフォルダ・ファイルを削除します。この操作は元に戻せません。</p> : <label>フォルダ名<input aria-label="フォルダ名" value={folderName} onChange={event => setFolderName(event.target.value)} /></label>}
       {folderError && <p role="alert">{folderError}</p>}<button disabled={folderBusy} onClick={() => setFolderAction(null)}>キャンセル</button><button disabled={folderBusy || (folderAction !== 'delete' && !folderName.trim())} onClick={() => {
@@ -247,7 +234,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       } else if (target.folder) {
         setFolderTarget(target.folder); setFolderAction(action); setFolderName(target.folder.split('/').at(-1)!); setFolderError('');
       }
-    }} refresh={() => { setMenu(null); setStorageBusy(true); void refresh().then(() => { setError(''); setNotice('フォルダとファイルを最新の状態に更新しました。'); }).catch(report).finally(() => setStorageBusy(false)); }} busy={storageBusy || !storageReady} />}
+    }} refresh={() => void synchronizeFolders()} busy={storageBusy || !storageReady} />}
     {fileAction && <DocumentDialog label="ファイル操作" close={() => { if (!fileBusy) setFileAction(null); }}><h2>{fileAction.action === 'rename' ? 'ファイル名を変更' : 'ファイルを削除'}</h2><p>対象: {folder ?? 'ブラウザ内保存'}/{fileAction.file.folderPath ? fileAction.file.folderPath + '/' : ''}{fileAction.file.title}</p>
       {fileAction.action === 'rename' ? <label>ファイル名<input aria-label="ファイル名" value={fileName} onChange={event => setFileName(event.target.value)} /></label> : <p>このファイルを削除します。この操作は元に戻せません。</p>}
       {fileError && <p role="alert">{fileError}</p>}<button disabled={fileBusy} onClick={() => setFileAction(null)}>キャンセル</button><button disabled={fileBusy || (fileAction.action === 'rename' && !fileName.trim())} onClick={() => {
@@ -267,7 +254,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         })().catch(error => setFileError(error instanceof Error ? error.message : '操作できません')).finally(() => setFileBusy(false));
       }}>実行</button></DocumentDialog>}
     {destinationChoice && <DocumentDialog label="作成先フォルダの選択" close={() => setDestinationChoice(null)}><h2>作成先フォルダを選択</h2><p>検索結果から作成先を一意に決定できません。</p><label>作成先フォルダ<select aria-label="作成先フォルダ" value={creationFolder} onChange={event => setCreationFolder(event.target.value)}>{folders.map(path => <option key={path} value={path}>{folder ?? 'ブラウザ内保存'}/{path}</option>)}</select></label><button onClick={() => setDestinationChoice(null)}>キャンセル</button><button onClick={() => { const kind = destinationChoice; setDestinationChoice(null); beginCreation(kind, creationFolder); }}>次へ</button></DocumentDialog>}
-    {help && <DocumentDialog label="使い方"><h2>DocSymbiの使い方</h2><p>一覧から文書を開き、左のアウトラインから節に移動できます。検索欄の末尾に / を付けると、保存先ルートからのフォルダパスを検索できます。</p><p>「編集」で本文や文書情報を変更し、「保存」で保存します。「編集を終了」は閲覧への切り替えで、自動保存はしません。</p><p>アクセス許可は「保存先に再接続」、外部変更の反映はフォルダ横の「⋯」→「更新」を利用してください。フォルダやファイルの名前変更・削除は右クリックメニューから操作できます。</p><button onClick={() => setHelp(false)}>閉じる</button></DocumentDialog>}
+    {help && <DocumentDialog label="使い方"><h2>DocSymbiの使い方</h2><p>一覧から文書を開き、左のアウトラインから節に移動できます。検索欄の末尾に / を付けると、保存先ルートからのフォルダパスを検索できます。</p><p>「編集」で本文や文書情報を変更し、「保存」で保存します。「編集を終了」は閲覧への切り替えで、自動保存はしません。</p><p>保存先への再接続と外部変更の反映は「フォルダ」横の同期アイコン、または「⋯」→「同期・再接続」を利用してください。フォルダやファイルの名前変更・削除は右クリックメニューから操作できます。</p><button onClick={() => setHelp(false)}>閉じる</button></DocumentDialog>}
     {pending && <DocumentDialog label="未保存の変更"><h2>変更を保存しますか？</h2><p>移動前に、編集中の文書の扱いを選んでください。</p>
       <button onClick={() => { navigationRequest.current++; setPending(null); }}>キャンセル</button>
       <button disabled={state.saveState === 'saving'} onClick={() => { const action = pending; setPending(null); void Promise.resolve().then(action).catch(report); }}>破棄して移動</button>

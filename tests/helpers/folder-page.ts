@@ -8,14 +8,14 @@ export async function prepareFolder(page: Page, url = 'http://localhost:4173/') 
     Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () =>
       (await navigator.storage.getDirectory()).getDirectoryHandle('articles', { create: true }) });
   });
-  await page.getByRole('button', { name: /保存フォルダーを(選択|変更)/ }).click();
+  await page.getByRole('button', { name: 'フォルダを同期・再接続' }).click();
   await expect(page.getByRole('navigation', { name: 'フォルダ階層' }).getByRole('button', { name: '▱ articles', exact: true })).toBeVisible();
 }
 export const test = base.extend({
   page: async ({ page, context }, use, testInfo) => {
     await prepareFolder(page);
     if (testInfo.project.name === 'e2e-offline') {
-      await expect(page.getByText('オフライン利用の準備完了', { exact: true })).toBeVisible();
+      await page.evaluate(async () => { await navigator.serviceWorker.ready; });
       await context.setOffline(true);
       await page.reload();
     }

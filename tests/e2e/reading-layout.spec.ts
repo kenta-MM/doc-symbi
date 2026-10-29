@@ -1,0 +1,59 @@
+import { expect, test } from '../helpers/folder-page';
+import { fixtureDocument } from '../fixtures/documents';
+
+test('reading controls share the breadcrumb row and all three panes scroll independently', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/tests/harness.html');
+  await page.evaluate(async text => {
+    const document = JSON.parse(text);
+    document.metadata.tags = Array.from({ length: 100 }, (_, i) => `タグ${i}`);
+    document.blocks = Array.from({ length: 45 }, (_, i) => ({ kind: 'heading', id: crypto.randomUUID(), metadata: {}, text: `見出し ${i}`, level: 2 }));
+    await window.createFileRepositoryTest().create(document);
+  }, JSON.stringify(fixtureDocument()));
+  await page.goto('/');
+  await page.locator('.catalog-table .document-link').click();
+  await expect(page.locator('.workspace-toolbar')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '情報を閉じる' })).toHaveCount(0);
+  const breadcrumb = page.getByRole('navigation', { name: 'パンくずリスト' });
+  await expect(breadcrumb.getByRole('button', { name: '編集', exact: true })).toBeVisible();
+  await expect(breadcrumb.getByRole('status')).toContainText('保存済み');
+  await expect(page.locator('.document-properties').getByRole('combobox')).toHaveCount(0);
+  await expect(page.locator('.document-properties .tag')).toHaveCount(100);
+  await expect(page.locator('.document-properties dd')).toHaveCount(6);
+  const sidebar = page.locator('.outline-sidebar');
+  const width = (await sidebar.boundingBox())!.width;
+  const handle = page.getByRole('separator', { name: 'アウトラインの幅' });
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + 40);
+  await page.mouse.up();
+  expect((await sidebar.boundingBox())!.width).toBeCloseTo(width + 80, 0);
+  await handle.press('ArrowLeft');
+  expect((await sidebar.boundingBox())!.width).toBeCloseTo(width + 70, 0);
+  const properties = page.locator('.properties-pane');
+  const propertiesWidth = (await properties.boundingBox())!.width;
+  const propertiesHandle = page.getByRole('separator', { name: 'ドキュメント情報の幅' });
+  const propertiesBox = (await propertiesHandle.boundingBox())!;
+  await page.mouse.move(propertiesBox.x + propertiesBox.width / 2, propertiesBox.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(propertiesBox.x + propertiesBox.width / 2 - 60, propertiesBox.y + 40);
+  await page.mouse.up();
+  expect((await properties.boundingBox())!.width).toBeCloseTo(propertiesWidth + 60, 0);
+  await propertiesHandle.press('ArrowRight');
+  expect((await properties.boundingBox())!.width).toBeCloseTo(propertiesWidth + 50, 0);
+  for (const selector of ['.outline-scroll', '.document-canvas', '.document-properties']) {
+    const pane = page.locator(selector);
+    await pane.hover();
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => pane.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(720);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await breadcrumb.getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByLabel('文書名', { exact: true }).fill('変更したタイトル');
+  await breadcrumb.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(breadcrumb.getByRole('status')).toContainText('保存済み');
+  await page.setViewportSize({ width: 390, height: 720 });
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(720);
+});

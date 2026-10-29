@@ -143,3 +143,39 @@
 .library-workspace .catalog-table th{position:sticky;top:0;z-index:1}
 .library-workspace .new-document{overflow:auto;width:100%}
 @media(max-width:700px){.app-shell .library-workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(100px,30%) minmax(0,1fr)}}
+
+/* Compact article controls and reading typography. */
+.breadcrumbs .document-actions{margin-left:auto;gap:10px;flex-wrap:wrap}
+.breadcrumbs .document-actions button{border:1px solid var(--line);padding:4px 8px}
+.breadcrumbs .document-actions .primary{background:var(--green);color:white}
+.reading-workspace .outline summary{font-size:14px}
+.reading-workspace .outline button{font-size:12px;padding-top:6px;padding-bottom:6px}
+.reading-workspace .document-title{font-size:23px;padding:18px 26px}
+.reading-workspace .document-title input{font-size:20px;max-width:none}
+.reading-workspace .tiptap{font-size:14px;padding:24px 26px}
+.reading-workspace .tiptap h1{font-size:26px}
+.reading-workspace .tiptap h2{font-size:22px}
+.reading-workspace .tiptap h3{font-size:18px}
+.app-shell:has(.reading-workspace){height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.app-shell:has(.reading-workspace)>.app-header,.app-shell:has(.reading-workspace)>.breadcrumbs,.app-shell:has(.reading-workspace)>.storage-warning{flex-shrink:0}
+.app-shell .reading-workspace{flex:1;min-height:0;overflow:hidden}
+.reading-workspace .outline-sidebar{position:relative;display:flex;min-height:0;max-height:none;overflow:hidden;padding:18px 12px}
+.reading-workspace .outline-scroll{flex:1;min-width:0;overflow:auto;overscroll-behavior:contain}
+.reading-workspace .sidebar-resize-handle{right:0}
+.reading-workspace:has(.sidebar-resize-handle.dragging){user-select:none;cursor:col-resize}
+@media(min-width:701px){.reading-workspace{grid-template-columns:min(var(--folder-width,240px),50vw) minmax(0,1fr)}}
+.reading-workspace .outline{position:static;max-height:none;overflow:visible}
+.reading-workspace .document-main{display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:16px}
+.reading-workspace .editing-layout{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 210px;grid-template-rows:minmax(0,1fr);align-items:stretch;gap:16px;overflow:hidden}
+.reading-workspace .document-canvas,.reading-workspace .document-properties{min-height:0;overflow:auto;overscroll-behavior:contain}
+.reading-workspace .document-properties{position:static}
+.reading-workspace .document-properties label{display:block;width:auto;margin-right:0}
+.document-properties dl{margin:0;font-size:12px}
+.document-properties dl>div{margin-bottom:20px}
+.document-properties dt{color:#6e7e73}
+.document-properties dd{margin-left:0}
+.reading-workspace .properties-pane{position:relative;display:flex;min-width:0;min-height:0;overflow:hidden}
+.reading-workspace .properties-pane .document-properties{flex:1}
+.reading-workspace .sidebar-resize-handle.resize-left{left:0;right:auto}
+@media(min-width:701px){.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr) min(var(--properties-width,210px),50%)}}
+@media(max-width:700px){.app-shell .reading-workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(70px,20%) minmax(0,1fr)}.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(80px,25%);gap:8px}.reading-workspace .document-main{padding:8px}}

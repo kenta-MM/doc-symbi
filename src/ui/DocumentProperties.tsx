@@ -3,6 +3,19 @@ import { documentProperties, documentTypes, documentStatuses } from '../domain/c
 
 export function DocumentProperties({ document, folder, editable, change }: { document: Document; folder: string; editable: boolean; change: (values: { type?: string; status?: string; tags?: string[] }) => void }) {
   const properties = documentProperties(document);
+  if (!editable) {
+    const values = [
+      ['種類', documentTypes[properties.type as keyof typeof documentTypes] ?? properties.type],
+      ['フォルダ', folder || 'ルート'],
+      ['タグ', properties.tags.join('、') || '未設定'],
+      ['ステータス', documentStatuses[properties.status as keyof typeof documentStatuses] ?? properties.status],
+      ['更新日時', new Date(document.updatedAt).toLocaleString('ja-JP')],
+      ['作成日時', new Date(document.createdAt).toLocaleString('ja-JP')],
+    ];
+    return <aside className="document-properties" aria-label="ドキュメント情報"><h2>ドキュメント情報</h2>
+      <dl>{values.map(([name, value]) => <div key={name}><dt>{name}</dt><dd className="property-value">{name === 'タグ' && properties.tags.length ? properties.tags.map(tag => <span className="tag" key={tag}>{tag}</span>) : value}</dd></div>)}</dl>
+    </aside>;
+  }
   return <aside className="document-properties" aria-label="ドキュメント情報"><h2>ドキュメント情報</h2>
     <label>種類<select aria-label="ドキュメント種類" disabled={!editable} value={properties.type} onChange={event => change({ type: event.target.value })}>
       {!Object.hasOwn(documentTypes, properties.type) && <option>{properties.type}</option>}{Object.entries(documentTypes).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>

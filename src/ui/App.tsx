@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { SidebarResizeHandle } from './SidebarResizeHandle';
 import { registerOffline } from '../offline/register';
 import { renameDocument } from '../domain/document';
 import { CreationMenu, type CreationTarget } from './CreationMenu';
@@ -27,6 +28,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   useEffect(() => registerOffline(() => {}).dispose, []);
   const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [propertiesWidth, setPropertiesWidth] = useState(210);
   const [menu, setMenu] = useState<CreationTarget | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [destinationChoice, setDestinationChoice] = useState<'document' | 'folder' | null>(null);
@@ -41,7 +43,6 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [selectedFolder, setSelectedFolder] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [catalogVersion, setCatalogVersion] = useState(0);
-  const [information, setInformation] = useState(true);
   const [folderAction, setFolderAction] = useState<'create' | 'rename' | 'delete' | null>(null);
   const [folderName, setFolderName] = useState('');
   const [folderError, setFolderError] = useState('');
@@ -166,21 +167,17 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         session.close(); setEditingId(null); setCreating(false); setSelectedFolder(''); setTagFilter(''); setMenu(null); setCatalogVersion(version => version + 1);
       })}>DocSymbi</button></h1><span className="tagline">構造から、伝わるドキュメントへ。</span></div>
       <div className="header-actions"><button className="icon-button" aria-label="使い方" onClick={() => setHelp(true)}><Icon name="help" /></button><button className="primary" disabled={storageBusy || !storageReady} onClick={() => beginCreation('document', selectedFolder)}>新規作成</button></div></header>
-    {state.document && <div className="workspace-toolbar">
-    {state.document && <div className="document-heading">{editable && <input aria-label="文書名" title={title} value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { if (!editable) return; try { session.rename(title); } catch (error) { report(error); setTitle(state.document!.title); } }} />}
-      <div className="document-actions"><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button onClick={() => setDeleting(true)}>文書を削除</button>}</div>
-    </div>}
-    </div>}
     {storage && !storage.supported && <p className="storage-warning">フォルダー保存にはデスクトップ版ChromeまたはEdgeを使用してください。</p>}
     {notice && <p className="storage-warning" role="status">{notice}</p>}
     {storage?.warning && <p className="storage-warning" role="note">{storage.warning}</p>}
     {state.document && <nav className="breadcrumbs" aria-label="パンくずリスト">
       <button onClick={() => navigate(() => { session.close(); setSelectedFolder(''); })}>ドキュメント</button>
       {(documents.find(row => row.id === state.document!.id)?.folderPath ?? '').split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button onClick={() => navigate(() => { session.close(); setSelectedFolder(parts.slice(0, index + 1).join('/')); })}>{part}</button></span>)}
-      <span> / {title}</span><button className="information-toggle" aria-expanded={information} onClick={() => setInformation(!information)}>{information ? '情報を閉じる' : 'ドキュメント情報'}</button>
+      <span> / {title}</span>
+      <div className="document-actions"><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button onClick={() => setDeleting(true)}>文書を削除</button>}</div>
     </nav>}
     <div style={{ '--folder-width': `${sidebarWidth}px` } as CSSProperties} className={`workspace ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
-      {state.document ? <aside className="document-sidebar outline-sidebar"><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></aside> :
+      {state.document ? <aside className="document-sidebar outline-sidebar"><div className="outline-scroll"><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></div><SidebarResizeHandle width={sidebarWidth} resize={setSidebarWidth} label="アウトラインの幅" /></aside> :
       <FolderNavigation width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
       <main className="document-main">
       {(error || state.error) && <div role="alert" className="error-banner">{error || state.error?.message}{state.document && state.saveState === 'error' && <button onClick={() => void save()}>保存を再試行</button>}</div>}
@@ -194,14 +191,14 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       }} /> : !state.document ? <>
         <DocumentCatalog key={catalogVersion} menu={setMenu} rootName={folder ?? 'ブラウザ内保存'} documents={documents} folders={folders} folder={selectedFolder} selectFolder={setSelectedFolder} tagFilter={tagFilter} setTagFilter={setTagFilter} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} />
       </> : <>
-        <div className={`editing-layout ${information ? '' : 'information-hidden'}`}><div className="document-canvas">
-          <h2 className="document-title">{title}</h2>
+        <div className="editing-layout" style={{ '--properties-width': `${propertiesWidth}px` } as CSSProperties}><div className="document-canvas">
+          {editable ? <div className="document-title document-heading"><input aria-label="文書名" title={title} value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { if (!editable) return; try { session.rename(title); } catch (error) { report(error); setTitle(state.document!.title); } }} /></div> : <h2 className="document-title">{title}</h2>}
           {editable && <div className="sticky-editor-tools"><HistoryToolbar editor={editor} />
           <BlockToolbar key={state.document.id} document={state.document} editor={editor} environment={session.environment} /></div>}
           <EditorPane key={state.loadVersion} editable={editable} document={state.document} createEditor={createEditor} connect={connect} />
-        </div>{information && <DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
+        </div><div className="properties-pane"><SidebarResizeHandle width={propertiesWidth} resize={setPropertiesWidth} label="ドキュメント情報の幅" edge="left" /><DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
           try { const current = session.state.document!; session.accept({ ...current, metadata: { ...current.metadata, ...values }, updatedAt: session.environment.clock() }); } catch (error) { report(error); }
-        }} />}</div>
+        }} /></div></div>
       </>}
     </main></div>
     {folderAction && <DocumentDialog label="フォルダ操作" close={() => { if (!folderBusy) setFolderAction(null); }}><h2>{folderAction === 'create' ? 'フォルダ作成' : folderAction === 'rename' ? 'フォルダ名を変更' : 'フォルダを削除'}</h2>

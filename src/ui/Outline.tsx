@@ -14,10 +14,10 @@ export function Outline({ document, focus }: { document: Document; focus: (id: s
         if (current) setSelected(current.dataset.headingId ?? null);
       });
     };
-    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('scroll', update, { passive: true, capture: true });
     window.addEventListener('resize', update);
     update();
-    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', update, true); window.removeEventListener('resize', update); };
   }, [document]);
   const current = entries.some(entry => entry.headingId === selected) ? selected : entries[0]?.headingId;
   return <details className="outline" open><summary>アウトライン</summary>

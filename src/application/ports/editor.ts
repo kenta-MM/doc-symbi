@@ -1,7 +1,9 @@
-import type { Document } from '../../domain/schema';
+import type { Document, Block } from '../../domain/schema';
 import type { DocumentEnvironment } from '../../domain/document';
 import type { EditorCommand } from '../../domain/commands';
 export type { EditorCommand } from '../../domain/commands';
+export type CursorAction = 'paragraph' | 'heading' | 'bullet' | 'ordered' | 'code' | 'bold' | 'indent' | 'outdent' | 'delete' | 'rowAdd' | 'rowDelete' | 'columnAdd' | 'columnDelete' | 'up' | 'down' | 'headingLevel';
+export interface CursorContext { blockId?: string | undefined; language?: string | undefined; headingLevel?: number | undefined; selected: boolean; href?: string | undefined; inTable: boolean }
 
 /** The implementation owns its host element; DOM and editor position types stay inside. */
 export interface EditorPort {
@@ -10,6 +12,11 @@ export interface EditorPort {
   execute(command: EditorCommand, environment: DocumentEnvironment): void;
   focusHeading(id: string): void;
   applyHeading(): void;
+  applyAtCursor?(action: CursorAction, value?: string): void;
+  insertAtCursor?(block: Block): void;
+  setLink?(href: string): void;
+  cursorContext?(): CursorContext;
+  onSelectionChange?(listener: () => void): () => void;
   undo(): void;
   redo(): void;
   readonly canUndo: boolean;

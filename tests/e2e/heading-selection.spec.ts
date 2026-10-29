@@ -3,6 +3,8 @@ import { fixtureDocument } from '../fixtures/documents';
 
 test('heading applies to highlighted text and supports keyboard history', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   const body = page.locator('.tiptap');
   await body.fill('before selected after');
   await body.focus();
@@ -44,6 +46,8 @@ test('reverse multi-block selection retains empty edge lines and history', async
 
 test('without a highlight heading applies to the cursor line', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   const body = page.locator('.tiptap');
   await body.fill('first');
   await page.keyboard.press('Shift+Enter');

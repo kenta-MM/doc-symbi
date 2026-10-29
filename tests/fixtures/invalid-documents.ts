@@ -2,7 +2,7 @@ import { fixtureDocument } from './documents';
 const base = fixtureDocument();
 export const invalidDocuments: [string, unknown][] = [
   ['format', { ...base, format: 'other' }],
-  ['version', { ...base, schemaVersion: 3 }],
+  ['version', { ...base, schemaVersion: 99 }],
   ['unknown key', { ...base, extra: true }],
   ['empty blocks', { ...base, blocks: [] }],
   ['blank title', { ...base, title: ' \t ' }],

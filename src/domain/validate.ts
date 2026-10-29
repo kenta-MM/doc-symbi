@@ -34,14 +34,19 @@ export function validateDocument(input: unknown): Document {
       ids.add(value.id);
     }
     if (typeof value.text === 'string') {
+      if (Array.isArray(value.formatting) && value.formatting.some(range => !record(range) || typeof range.to !== 'number' || range.to > (value.text as string).length)) throw new ValidationError('InvalidStructure', '書式の範囲が本文を超えています');
       for (const point of value.text) { void point; points++; }
       if (points > limits.textPoints) throw new ValidationError('LimitExceeded', '本文は 100万文字以内にしてください');
     }
+    for (const field of ['prompt', 'explanation']) if (typeof value[field] === 'string') points += [...value[field]].length;
+    if (Array.isArray(value.options)) for (const option of value.options) if (typeof option === 'string') points += [...option].length;
+    if (points > limits.textPoints) throw new ValidationError('LimitExceeded', '本文は 100万文字以内にしてください');
     const nextDepth = value.kind === 'list' ? depth + 1 : depth;
     if (nextDepth > limits.listDepth) throw new ValidationError('LimitExceeded', 'リストの深さは 32 までです');
-    for (const field of ['items', 'children']) if (Array.isArray(value[field])) {
+    for (const field of ['items', 'children', 'questions']) if (Array.isArray(value[field])) {
       for (const child of value[field]) pending.push({ value: child, depth: nextDepth });
     }
+    if (Array.isArray(value.rows)) for (const row of value.rows) if (Array.isArray(row)) for (const cell of row) pending.push({ value: cell, depth });
   }
   const result = documentSchema.safeParse(input);
   if (!result.success) throw new ValidationError('InvalidStructure', result.error.issues[0]?.message ?? '不正な文書', result.error.issues[0]?.path.join('.') ?? '');

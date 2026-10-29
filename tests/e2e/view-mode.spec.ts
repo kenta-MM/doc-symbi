@@ -2,6 +2,8 @@ import { expect, test } from '../helpers/folder-page';
 
 test('view mode prevents changes, retains unsaved content and history, and is the default on reopen', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   const body = page.locator('.tiptap');
   await expect(body).toHaveAttribute('contenteditable', 'true');
   await body.fill('保存前の本文');
@@ -23,6 +25,7 @@ test('view mode prevents changes, retains unsaved content and history, and is th
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.reload();
+  await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
   await page.locator('.document-link').click();
   await expect(body).toHaveAttribute('contenteditable', 'false');
   await expect(body).toHaveText('保存前の本文');

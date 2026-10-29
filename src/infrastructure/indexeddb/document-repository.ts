@@ -3,6 +3,7 @@ import { RepositoryError } from '../../application/errors';
 import type { Document } from '../../domain/schema';
 import { validateDocument } from '../../domain/validate';
 import { openDatabase, storageError } from './database';
+import { summarize } from '../../domain/catalog';
 
 function checkedDocument(input: unknown): Document {
   try { return validateDocument(input); }
@@ -45,7 +46,7 @@ export class IndexedDbRepository implements DocumentRepository {
         try {
           const rows = request.result.map(value => {
             const { document, revision } = checkedRecord(value);
-            return { id: document.id, title: document.title, updatedAt: document.updatedAt, revision };
+            return summarize(document, revision);
           });
           rows.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || a.id.localeCompare(b.id));
           done(rows);

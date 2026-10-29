@@ -1,0 +1,58 @@
+import { expect, test } from '../helpers/folder-page';
+
+test('author, answer, skip, navigate, edit and reload a multiple-question quiz', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.getByRole('button', { name: 'クイズを追加', exact: true }).click();
+  for (let i = 1; i <= 3; i++) {
+    if (i > 1) await page.getByRole('button', { name: '問題を追加', exact: true }).click();
+    await page.getByLabel(`問題${i}の問題文`, { exact: true }).fill(`問題文 ${i}`);
+    await page.getByLabel(`問題${i}の選択肢1`, { exact: true }).fill(`正しい選択肢 ${i}`);
+    await page.getByLabel(`問題${i}の選択肢2`, { exact: true }).fill(`誤った選択肢 ${i}`);
+    await page.getByLabel(`問題${i}の解説`, { exact: true }).fill(`解説文 ${i}`);
+  }
+  await page.getByRole('button', { name: 'クイズを適用', exact: true }).click();
+  const quiz = page.getByRole('region', { name: '選択クイズ' });
+  await expect(quiz).toContainText('問題 1 / 3');
+  await expect(quiz.getByRole('button', { name: '前へ', exact: true })).toBeDisabled();
+  await expect(quiz.locator('.quiz-feedback')).toBeHidden();
+  await quiz.getByRole('button', { name: '次の問題', exact: true }).click();
+  await expect(quiz).toContainText('問題 2 / 3');
+  await quiz.getByRole('radio', { name: '誤った選択肢 2', exact: true }).check();
+  await expect(quiz.getByRole('status')).toContainText('× 不正解');
+  await expect(quiz.getByRole('status')).toContainText('解説文 2');
+  await quiz.screenshot({ path: `test-results/quiz-${testInfo.project.name}.png` });
+  await quiz.getByRole('button', { name: '次の問題', exact: true }).click();
+  await expect(quiz).toContainText('問題 3 / 3');
+  await expect(quiz.getByRole('button', { name: '次の問題', exact: true })).toBeDisabled();
+  await quiz.getByRole('radio', { name: '正しい選択肢 3', exact: true }).check();
+  await expect(quiz.getByRole('status')).toContainText('〇 正解');
+  await quiz.getByRole('button', { name: '前へ', exact: true }).click();
+  await expect(quiz.getByRole('radio', { name: '誤った選択肢 2', exact: true })).toBeChecked();
+  await quiz.getByRole('button', { name: '前へ', exact: true }).click();
+  await expect(quiz.locator('.quiz-feedback')).toBeHidden();
+  await quiz.getByRole('button', { name: 'クイズを編集', exact: true }).click();
+  await page.getByLabel('問題1の問題文', { exact: true }).fill('変更した問題文');
+  await page.getByRole('button', { name: 'クイズを適用', exact: true }).click();
+  await expect(quiz).toContainText('変更した問題文');
+  await page.locator('.tiptap').focus(); await page.keyboard.press('Control+z');
+  await expect(quiz).toContainText('問題文 1');
+  await page.keyboard.press('Control+y');
+  await expect(quiz).toContainText('変更した問題文');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status', { name: '保存状態' })).toContainText('保存済み');
+  await page.reload();
+  await expect(quiz).toContainText('変更した問題文');
+  await expect(quiz.getByRole('button', { name: 'クイズを編集', exact: true })).toHaveCount(0);
+  await quiz.getByRole('radio', { name: '正しい選択肢 1', exact: true }).check();
+  await expect(quiz.getByRole('status')).toContainText('〇 正解');
+  await expect(page.getByRole('status', { name: '保存状態' })).not.toContainText('未保存');
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await quiz.getByRole('button', { name: 'クイズを編集', exact: true }).click();
+  await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.getByRole('button', { name: 'ブロック削除', exact: true }).click();
+  await expect(quiz).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  await expect(quiz).toContainText('変更した問題文');
+});

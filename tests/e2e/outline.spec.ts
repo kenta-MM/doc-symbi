@@ -2,6 +2,8 @@ import { expect, test } from '../helpers/folder-page';
 import { fixtureDocument } from '../fixtures/documents';
 test('outline labels update and select the correct heading', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.getByRole('button', { name: '見出し', exact: true }).click();
   await expect(page.getByRole('button', { name: '無題の見出し', exact: true })).toBeVisible();
   await page.locator('.tiptap h1').fill('目的の節');
@@ -25,7 +27,7 @@ test('duplicate, empty and skipped-level headings navigate by identity and updat
     await expect(page.locator('.tiptap > *').nth(index)).toBeInViewport();
   }
   await page.getByRole('button', { name: '編集', exact: true }).click();
-  await page.getByLabel('操作対象ブロック').selectOption(blocks[1]!.id);
+  await page.locator('.tiptap > *').nth(1).click();
   await page.getByLabel('見出しレベル').selectOption('2');
   await expect(page.locator('.tiptap > h2')).toHaveText('同名');
   await page.getByRole('button', { name: '上へ', exact: true }).click();

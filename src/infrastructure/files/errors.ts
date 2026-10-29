@@ -9,6 +9,6 @@ export function fileRepositoryError(error: unknown, documentId?: string): Reposi
     : name === 'QuotaExceededError' ? 'QuotaExceeded' : name === 'AbortError' ? 'Aborted'
       : name === 'NotFoundError' ? 'NotFound' : 'StorageUnavailable';
   const advice = name === 'NotAllowedError' || name === 'SecurityError' ? '保存先に再接続してアクセスを許可してください。 '
-    : code === 'QuotaExceeded' ? '保存先の空き容量を確認して再試行してください。 ' : '';
+    : name === 'NotFoundError' ? '保存先や対象フォルダを確認し、保存先に再接続してください。 ' : code === 'QuotaExceeded' ? '保存先の空き容量を確認して再試行してください。 ' : '';
   return new RepositoryError(code, advice + (error instanceof Error ? error.message : '保存先を利用できません'), documentId, { cause: error });
 }

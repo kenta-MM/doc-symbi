@@ -1,16 +1,15 @@
+import { copyDirectory, directoryFingerprint, type Directory } from './directory-operations';
 import type { DocumentRepository, StoredDocument } from '../../application/ports/document-repository';
 import type { FolderStorage } from '../../application/ports/folder-storage';
 import { RepositoryError } from '../../application/errors';
 import type { Document } from '../../domain/schema';
 import { deserialize, serialize } from '../../domain/codec';
 import { limits } from '../../domain/validate';
+import { summarize, pathParts } from '../../domain/catalog';
 import { fileRepositoryError } from './errors';
 
-export interface Directory extends FileSystemDirectoryHandle {
-  values(): AsyncIterableIterator<FileSystemFileHandle | Directory>;
-  queryPermission(options: { mode: 'readwrite' }): Promise<PermissionState>;
-  requestPermission(options: { mode: 'readwrite' }): Promise<PermissionState>;
-}
+export type { Directory } from './directory-operations';
+
 type PickerWindow = Window & { showDirectoryPicker?: (options: { mode: 'readwrite'; id: string }) => Promise<Directory> };
 const suffix = '.docsymbi.json';
 async function revision(text: string): Promise<number> {
@@ -93,8 +92,10 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
   }
   private async scan() {
     const directory = await this.root();
-    const entries = new Map<string, StoredDocument & { name: string }>();
+    const entries = new Map<string, StoredDocument & { name: string; directory: Directory; folderPath: string }>();
+    const walk = async (directory: Directory, folderPath: string) => {
     for await (const handle of directory.values()) {
+      if (handle.kind === 'directory') { await walk(handle as Directory, folderPath ? `${folderPath}/${handle.name}` : handle.name); continue; }
       if (handle.kind !== 'file' || !handle.name.endsWith(suffix)) continue;
       try {
         const file = await handle.getFile();
@@ -102,36 +103,45 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
         const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
         const document = deserialize(text);
         if (entries.has(document.id)) throw new RepositoryError('ValidationFailed', '記事IDが重複しています', document.id);
-        entries.set(document.id, { document, revision: await revision(text), name: handle.name });
+        entries.set(document.id, { document, revision: await revision(text), name: handle.name, directory, folderPath });
       } catch (error) {
         const failure = fileRepositoryError(error);
         const code = error instanceof TypeError ? 'ValidationFailed' : failure.code;
-        throw new RepositoryError(code, `${handle.name}: ${failure.message}`, failure.documentId, { cause: error });
+        throw new RepositoryError(code, `${folderPath ? `${folderPath}/` : ''}${handle.name}: ${failure.message}`, failure.documentId, { cause: error });
       }
     }
+    };
+    await walk(directory, '');
     return entries;
   }
   async list() {
     return this.operation(async () => {
     await this.restore();
-    if (!this.directory) return [];
-    return [...(await this.scan()).values()].map(({ document, revision }) => ({ id: document.id, title: document.title, updatedAt: document.updatedAt, revision }))
+    if (!this.directory) return this.legacy?.list() ?? [];
+    return [...(await this.scan()).values()].map(({ document, revision, folderPath }) => summarize(document, revision, folderPath))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
     });
   }
   async get(id: string): Promise<StoredDocument> {
     return this.operation(async () => {
+    await this.restore();
+    if (!this.directory && this.legacy) return this.legacy.get(id);
     const item = (await this.scan()).get(id);
     if (!item) throw new RepositoryError('NotFound', '記事ファイルが見つかりません', id);
     return { document: item.document, revision: item.revision };
     }, id);
   }
-  private async write(document: Document, expected?: number): Promise<StoredDocument> {
+  private async write(document: Document, expected?: number, folderPath = ''): Promise<StoredDocument> {
+    await this.restore();
+    if (!this.directory && this.legacy) {
+      if (folderPath) throw new Error('実フォルダへの保存には保存先を接続してください');
+      return expected === undefined ? this.legacy.create(document) : this.legacy.save(document, expected);
+    }
     const text = serialize(document);
     deserialize(text); // Enforce the same size limit on writes and reads.
     return navigator.locks.request('docsymbi-file-write', async () => {
-      const directory = await this.root();
       const existing = (await this.scan()).get(document.id);
+      const directory = existing?.directory ?? await this.at(folderPath);
       if (expected === undefined && existing) throw new RepositoryError('Conflict', '同じIDの記事が存在します');
       if (expected !== undefined && !existing) throw new RepositoryError('NotFound', '記事ファイルが移動または削除されています');
       if (expected !== undefined && existing?.revision !== expected) throw new RepositoryError('Conflict', 'ファイルが外部で変更されています。編集中の記事を取り出してから開き直してください');
@@ -156,16 +166,100 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
       return { document: deserialize(text), revision: await revision(text) };
     });
   }
-  create(document: Document) { return this.operation(() => this.write(document), document.id); }
+  create(document: Document, folderPath = '') { return this.operation(() => this.write(document, undefined, folderPath), document.id); }
   save(document: Document, expectedRevision: number) { return this.operation(() => this.write(document, expectedRevision), document.id); }
   async delete(id: string, expectedRevision: number) {
+    await this.restore();
+    if (!this.directory && this.legacy) return this.legacy.delete(id, expectedRevision);
     await this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
       const item = (await this.scan()).get(id);
       if (!item) throw new RepositoryError('NotFound', '記事ファイルが見つかりません');
       if (item.revision !== expectedRevision) throw new RepositoryError('Conflict', 'ファイルが外部で変更されています');
-      await (await this.root()).removeEntry(item.name);
+      await item.directory.removeEntry(item.name);
     }), id);
   }
+  private async at(path: string): Promise<Directory> {
+    let directory = await this.root();
+    for (const part of pathParts(path)) directory = await directory.getDirectoryHandle(part) as Directory;
+    return directory;
+  }
+  folders(): Promise<string[]> { return this.operation(() => this.listFolders()); }
+  private async listFolders(): Promise<string[]> {
+    await this.restore();
+    if (!this.directory) return [''];
+    const paths = [''];
+    const walk = async (directory: Directory, parent: string) => {
+      for await (const handle of directory.values()) if (handle.kind === 'directory') {
+        const path = parent ? `${parent}/${handle.name}` : handle.name;
+        paths.push(path); await walk(handle as Directory, path);
+      }
+    };
+    await walk(await this.root(), '');
+    return paths.sort((a, b) => a.localeCompare(b, 'ja'));
+  }
+  async createFolder(path: string): Promise<void> {
+    const parts = pathParts(path); const name = parts.pop();
+    if (!name) throw new Error('フォルダ名を入力してください');
+    await this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
+      const parent = await this.at(parts.join('/'));
+      for await (const entry of parent.values()) if (entry.name === name) throw new Error('同名の項目が存在します');
+      await parent.getDirectoryHandle(name, { create: true });
+    }));
+  }
+  async deleteFolder(path: string, recursive = false): Promise<void> {
+    const parts = pathParts(path); const name = parts.pop();
+    if (!name) throw new Error('保存先ルートは削除できません');
+    // Recursive removal must be explicitly requested by a confirmed UI action.
+    await this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
+      await (await this.at(parts.join('/'))).removeEntry(name, { recursive });
+    }));
+  }
+  async renameFolder(path: string, name: string): Promise<void> {
+    if (pathParts(name).length !== 1) throw new Error('新しいフォルダ名を入力してください');
+    const parts = pathParts(path); const old = parts.pop();
+    if (!old) throw new Error('保存先ルートは変更できません');
+    if (name === old) return;
+    await this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
+      const directory = await this.at(path);
+      const original = await directoryFingerprint(directory);
+      const parent = await this.at(parts.join('/'));
+      for await (const entry of parent.values()) if (entry.name === name) throw new Error('同名の項目が存在します');
+      const target = await parent.getDirectoryHandle(name, { create: true }) as Directory;
+      try {
+        await copyDirectory(directory, target);
+        if (original !== await directoryFingerprint(target) || original !== await directoryFingerprint(directory)) throw new Error('フォルダの内容が変更されたため名前変更を中止しました');
+      } catch (error) { await parent.removeEntry(name, { recursive: true }).catch(() => undefined); throw error; }
+      // Never remove the verified copy if removing the original fails partway.
+      try { await parent.removeEntry(old, { recursive: true }); }
+      catch { throw new Error('コピーは完了しましたが元フォルダを削除できませんでした。両方のフォルダをOSで確認してください'); }
+    }));
+  }
+  async rename(document: Document, expectedRevision: number): Promise<StoredDocument> {
+    await this.restore();
+    if (!this.directory && this.legacy) return this.legacy.save(document, expectedRevision);
+    if (pathParts(document.title).length !== 1) throw new Error('ファイル名は1つの名前で入力してください');
+    const text = serialize(document); deserialize(text);
+    return this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
+      const item = (await this.scan()).get(document.id);
+      if (!item) throw new RepositoryError('NotFound', 'ファイルが見つかりません');
+      if (item.revision !== expectedRevision) throw new RepositoryError('Conflict', 'ファイルが外部で変更されています。一覧を再読み込みしてください');
+      const name = `${document.title.slice(0, 60)}--${crypto.randomUUID()}${suffix}`;
+      try { await item.directory.getFileHandle(name); throw new Error('同名ファイルが存在します'); }
+      catch (error) { if (!(error instanceof DOMException && error.name === 'NotFoundError')) throw error; }
+      const handle = await item.directory.getFileHandle(name, { create: true });
+      try {
+        const stream = await handle.createWritable();
+        try { await stream.write(text); await stream.close(); }
+        catch (error) { await stream.abort().catch(() => undefined); throw error; }
+        if (await revision(await (await handle.getFile()).text()) !== await revision(text)) throw new Error('名前変更後のファイルを検証できません');
+        const original = await item.directory.getFileHandle(item.name);
+        if (await revision(await (await original.getFile()).text()) !== expectedRevision) throw new Error('ファイルが外部で変更されたため名前変更を中止しました');
+        await item.directory.removeEntry(item.name);
+      } catch (error) { await item.directory.removeEntry(name).catch(() => undefined); throw error; }
+      return { document: deserialize(text), revision: await revision(text) };
+    }), document.id);
+  }
+
   async migrate() {
     let count = 0;
     const existing = await this.scan();

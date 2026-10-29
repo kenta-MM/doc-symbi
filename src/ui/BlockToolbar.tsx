@@ -1,54 +1,72 @@
-import { useState } from 'react';
-import type { Block, Document, List } from '../domain/schema';
-import type { EditorCommand } from '../application/ports/editor';
+import { useEffect, useState } from 'react';
+import type { Document } from '../domain/schema';
+import type { EditorPort, CursorAction, CursorContext } from '../application/ports/editor';
 import type { DocumentEnvironment } from '../domain/document';
-import { ImageAttachment, ImageInformation } from './ImageTools';
+import { languages, safeLink } from '../domain/rich-text';
+import { ImageAttachment } from './ImageTools';
+import { ImageInformation } from './ImageInformation';
+import { DocumentDialog } from './DocumentDialogs';
+import { QuizSettings } from './QuizSettings';
 
-const labels = { paragraph: '段落', heading: '見出し', code: 'コード', list: 'リスト', image: '画像' };
-export function BlockToolbar({ document, execute, environment, applyHeading }: {
-  document: Document; execute: (command: EditorCommand) => void; environment: DocumentEnvironment; applyHeading: () => void;
-}) {
-  const [selected, select] = useState('');
-  const [selectedItem, selectItem] = useState('');
-  const block = document.blocks.find(value => value.id === selected) ?? document.blocks[0]!;
-  const index = document.blocks.indexOf(block);
-  const items: { id: string; text: string; listId: string; index: number; depth: number }[] = [];
-  const lists = new Map<string, List>();
-  function collect(list: List, depth = 0) { lists.set(list.id, list); list.items.forEach((item, index) => { items.push({ id: item.id, text: item.text, listId: list.id, index, depth }); item.children.forEach(child => collect(child, depth + 1)); }); }
-  if (block.kind === 'list') collect(block);
-  const item = items.find(value => value.id === selectedItem) ?? items[0];
-  const currentList = item ? lists.get(item.listId) : undefined;
-  function add(kind: 'paragraph' | 'code' | 'bullet' | 'ordered') {
-    const common = { id: environment.id(), metadata: {} };
-    const next: Block = kind === 'bullet' || kind === 'ordered'
-      ? { ...common, kind: 'list', style: kind, items: [{ id: environment.id(), metadata: {}, text: '', children: [] }] }
-      : { ...common, kind, text: '' };
-    execute({ type: 'insertBlock', index: index + 1, block: next }); select(next.id);
-  }
+export function BlockToolbar({ document, editor, environment }: { document: Document; editor: EditorPort | null; environment: DocumentEnvironment }) {
+  const [context, setContext] = useState<CursorContext>({ selected: false, inTable: false });
+  const [menu, setMenu] = useState<{ x: number; y: number; imageId?: string } | null>(null);
+  const [imageId, setImageId] = useState<string | null>(null);
+  const [quizId, setQuizId] = useState<string | null>(null);
+  useEffect(() => {
+    const open = (event: Event) => setQuizId((event as CustomEvent<string>).detail);
+    window.addEventListener('quiz-edit', open);
+    return () => window.removeEventListener('quiz-edit', open);
+  }, []);
+  const [link, setLink] = useState<string | null>(null), [error, setError] = useState('');
+  const [table, setTable] = useState(false), [rows, setRows] = useState(3), [columns, setColumns] = useState(3), [header, setHeader] = useState(true);
+  useEffect(() => {
+    const update = () => {
+      const next = editor?.cursorContext?.() ?? { selected: false, inTable: false };
+      setContext(current => current.blockId === next.blockId && current.selected === next.selected && current.inTable === next.inTable && current.language === next.language && current.headingLevel === next.headingLevel && current.href === next.href ? current : next);
+    };
+    update(); return editor?.onSelectionChange?.(update);
+  }, [editor]);
+  useEffect(() => {
+    const open = (event: Event) => setMenu((event as CustomEvent<{ x: number; y: number; imageId?: string }>).detail);
+    const close = () => setMenu(null);
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    window.addEventListener('editor-context', open); window.addEventListener('click', close); window.addEventListener('keydown', key); window.addEventListener('scroll', close, true);
+    return () => { window.removeEventListener('editor-context', open); window.removeEventListener('click', close); window.removeEventListener('keydown', key); window.removeEventListener('scroll', close, true); };
+  }, []);
+  function action(action: CursorAction, value?: string) { try { editor?.applyAtCursor?.(action, value); setError(''); } catch (failure) { setError(failure instanceof Error ? failure.message : '編集を適用できません'); } }
+  function openLink() { setLink(editor?.cursorContext?.().href ?? ''); setError(''); setMenu(null); }
+  const image = document.blocks.find(block => block.id === imageId);
+  const quiz = document.blocks.find(block => block.id === quizId);
   return <div className="block-tools" aria-label="ブロック操作">
-    <div className="tool-row"><span className="tool-label">編集・追加</span>
-      <button onClick={() => add('paragraph')}>段落</button><button onMouseDown={event => event.preventDefault()} onClick={applyHeading}>見出し</button>
-      <button onClick={() => add('bullet')}>箇条書き</button><button onClick={() => add('ordered')}>番号付きリスト</button><button onClick={() => add('code')}>コード</button>
-      <ImageAttachment newId={environment.id} insert={block => { execute({ type: 'insertBlock', index: index + 1, block }); select(block.id); }} />
+    <div className="tool-row" onMouseDown={event => { if ((event.target as HTMLElement).closest('button')) event.preventDefault(); }}>
+      <span className="tool-label">編集・追加</span>
+      {([['heading', '見出し'], ['bullet', '箇条書き'], ['ordered', '番号付きリスト'], ['code', 'コード'], ['bold', '太字']] as const).map(([key, label]) => <button key={key} onClick={() => action(key)}>{label}</button>)}
+      <button disabled={!context.selected} onClick={openLink}>リンクの挿入</button>
+      <ImageAttachment newId={environment.id} insert={block => editor?.insertAtCursor?.(block)} />
+      <button onClick={() => setTable(true)}>表を挿入</button>
+      <button onClick={() => setQuizId('new')}>クイズを追加</button>
+      <button onClick={() => action('indent')}>字下げ</button><button onClick={() => action('outdent')}>字下げ解除</button>
+      <button onClick={() => action('delete')}>{context.inTable ? '表を削除' : 'ブロック削除'}</button>
+      <button onClick={() => action('up')}>上へ</button><button onClick={() => action('down')}>下へ</button>
+      {context.headingLevel !== undefined && <label>見出しレベル <select aria-label="見出しレベル" value={context.headingLevel} onChange={event => action('headingLevel', event.target.value)}>{[1, 2, 3, 4, 5, 6].map(level => <option key={level}>{level}</option>)}</select></label>}
+      {context.language !== undefined && <label>コード言語 <select aria-label="コード言語" value={context.language} onChange={event => action('code', event.target.value)}>{languages.map(language => <option key={language} value={language}>{language === 'text' ? 'プレーンテキスト' : language}</option>)}</select></label>}
+      {context.inTable && <>{([['rowAdd', '行を追加'], ['rowDelete', '行を削除'], ['columnAdd', '列を追加'], ['columnDelete', '列を削除']] as const).map(([key, label]) => <button key={key} onClick={() => action(key)}>{label}</button>)}</>}
     </div>
-    <div className="tool-row"><label>操作対象 <select aria-label="操作対象ブロック" value={block.id} onChange={event => select(event.target.value)}>
-      {document.blocks.map((value, i) => <option key={value.id} value={value.id}>{i + 1}. {labels[value.kind]} {'text' in value ? value.text.slice(0, 16) : value.kind === 'image' ? value.caption.slice(0, 24) : ''}</option>)}
-    </select></label>
-      <button disabled={index === 0} onClick={() => execute({ type: 'moveBlock', id: block.id, index: index - 1 })}>上へ</button>
-      <button disabled={index === document.blocks.length - 1} onClick={() => execute({ type: 'moveBlock', id: block.id, index: index + 1 })}>下へ</button>
-      <button onClick={() => execute({ type: 'deleteBlock', id: block.id })}>ブロック削除</button>
-      {(block.kind === 'heading' || block.kind === 'paragraph') && <button onClick={() => execute({ type: 'convertParagraphHeading', id: block.id, kind: block.kind === 'heading' ? 'paragraph' : 'heading' })}>{block.kind === 'heading' ? '段落に変更' : '見出しに変更'}</button>}
-      {block.kind === 'heading' && <label>レベル <select aria-label="見出しレベル" value={block.level} onChange={event => execute({ type: 'setHeadingLevel', id: block.id, level: Number(event.target.value) })}>{[1, 2, 3, 4, 5, 6].map(level => <option key={level}>{level}</option>)}</select></label>}
-    </div>
-    {block.kind === 'image' && <ImageInformation key={block.id} block={block} execute={execute} />}
-    {block.kind === 'list' && <div className="tool-row"><label>項目 <select aria-label="操作対象項目" value={item?.id ?? ''} onChange={event => selectItem(event.target.value)}>{items.map((value, i) => <option key={value.id} value={value.id}>{i + 1}. {value.text || '空の項目'}</option>)}</select></label>
-      {currentList && <label>リストの種類 <select aria-label="選択項目のリスト種類" value={currentList.style} onChange={event => execute({ type: 'setListStyle', listId: currentList.id, style: event.target.value === 'ordered' ? 'ordered' : 'bullet' })}><option value="bullet">箇条書き</option><option value="ordered">番号付きリスト</option></select></label>}
-      <button onClick={() => {
-        const id = environment.id();
-        execute({ type: 'insertListItem', listId: currentList?.id ?? block.id, index: currentList?.items.length ?? block.items.length, item: { id, metadata: {}, text: '', children: [] } });
-        selectItem(id);
-      }}>項目追加</button>
-      {item && <><button disabled={item.index === 0} onClick={() => execute({ type: 'indentListItem', id: item.id })}>字下げ</button><button disabled={item.depth === 0} onClick={() => execute({ type: 'outdentListItem', id: item.id })}>字下げ解除</button><button onClick={() => execute({ type: 'deleteListItem', id: item.id })}>項目削除</button></>}
+    {error && link === null && <p role="alert">{error}</p>}
+    {quizId !== null && <QuizSettings key={quizId} {...(quiz?.kind === 'quiz' ? { initial: quiz.questions } : {})} close={() => setQuizId(null)} apply={questions => {
+      if (quiz?.kind === 'quiz') editor?.execute({ type: 'updateQuiz', id: quiz.id, questions }, environment);
+      else editor?.insertAtCursor?.({ kind: 'quiz', id: environment.id(), metadata: {}, questions });
+    }} />}
+    {menu && <div role="menu" aria-label="本文のメニュー" className="editor-context-menu" style={{ left: Math.max(0, Math.min(menu.x, window.innerWidth - 220)), top: Math.max(0, Math.min(menu.y, window.innerHeight - 110)) }} onMouseDown={event => event.preventDefault()}>
+      {menu.imageId ? <button role="menuitem" autoFocus onClick={() => { setImageId(menu.imageId!); setMenu(null); }}>画像の詳細設定</button> : <><button role="menuitem" autoFocus onClick={openLink}>リンクの挿入</button><button role="menuitem" onClick={() => { action('bold'); setMenu(null); }}>太字</button></>}
     </div>}
+    {image?.kind === 'image' && <ImageInformation key={image.id} block={image} close={() => setImageId(null)} apply={block => { editor?.execute({ type: 'describeImage', id: block.id, caption: block.caption, alt: block.alt, semantics: block.semantics }, environment); setImageId(null); }} />}
+    {link !== null && <DocumentDialog label="リンクの挿入" close={() => setLink(null)}><h2>リンクの挿入</h2><form onSubmit={event => {
+      event.preventDefault(); const href = link.trim(); if (!safeLink(href)) { setError('http(s)・mailto・記事リンクを入力してください'); return; } try { editor?.setLink?.(href); setLink(null); } catch (failure) { setError(failure instanceof Error ? failure.message : 'リンクを適用できません'); }
+    }}><div className="link-entry"><input autoFocus aria-label="リンクURL" placeholder="https://…" value={link} onChange={event => setLink(event.target.value)} /><button type="submit">OK</button><button type="button" onClick={() => setLink(null)}>キャンセル</button></div>{error && <p role="alert">{error}</p>}</form></DocumentDialog>}
+    {table && <DocumentDialog label="表の挿入" close={() => setTable(false)}><h2>表の挿入</h2>{error && <p role="alert">{error}</p>}<form onSubmit={event => {
+      event.preventDefault(); try { editor?.insertAtCursor?.({ kind: 'table', id: environment.id(), metadata: {}, rows: Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, () => ({ id: environment.id(), metadata: {}, text: '', header: header && row === 0 }))) }); setTable(false); } catch (failure) { setError(failure instanceof Error ? failure.message : '表を挿入できません'); }
+    }}><label>行数<input aria-label="行数" type="number" min={1} max={100} required value={rows} onChange={event => setRows(Number(event.target.value))} /></label><label>列数<input aria-label="列数" type="number" min={1} max={20} required value={columns} onChange={event => setColumns(Number(event.target.value))} /></label><label><input type="checkbox" checked={header} onChange={event => setHeader(event.target.checked)} />先頭行を見出しにする</label><button type="submit">挿入</button><button type="button" onClick={() => setTable(false)}>キャンセル</button></form></DocumentDialog>}
   </div>;
 }

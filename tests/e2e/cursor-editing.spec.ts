@@ -1,0 +1,145 @@
+import { expect, test } from '../helpers/folder-page';
+import type { Page } from '@playwright/test';
+
+async function selectText(page: Page, selector: string, from: number, to = from) {
+  await page.locator(selector).evaluate((element, offsets) => {
+    (element.closest('.tiptap') as HTMLElement).focus();
+    const text = element.firstChild!;
+    window.getSelection()!.setBaseAndExtent(text, offsets.from, text, offsets.to);
+  }, { from, to });
+}
+test('selection bold and context link survive save, reload, and stable title URL', async ({ page }) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  const originalUrl = page.url();
+  await page.locator('.tiptap').fill('before selected after');
+  await selectText(page, '.tiptap p', 7, 15);
+  await page.keyboard.press('Control+b');
+  await expect(page.locator('.tiptap strong')).toHaveText('selected');
+  await page.locator('.tiptap strong').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'リンクの挿入' }).click();
+  await page.getByLabel('リンクURL').fill('https://example.com/article');
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.tiptap a')).toHaveText('selected');
+  await expect(page.locator('.tiptap a')).toHaveAttribute('href', 'https://example.com/article');
+  await page.getByLabel('文書名').fill('変更後のタイトル');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  expect(page.url()).toBe(originalUrl);
+  await page.reload();
+  await expect(page.locator('.tiptap a strong, .tiptap strong a')).toHaveText('selected');
+  expect(page.url()).toBe(originalUrl);
+});
+
+test('image inserts at cursor and details reopen from the image context menu', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.locator('.tiptap').fill('beforeafter');
+  await selectText(page, '.tiptap p', 6);
+  await page.getByLabel('画像ファイル').setInputFiles('docs/hyperscale-figures/figure-4.svg');
+  await expect(page.getByRole('dialog', { name: '画像の詳細設定' })).toBeVisible();
+  await expect(page.locator('textarea[aria-label*="JSON"]')).toHaveCount(0);
+  await page.getByLabel('キャプション', { exact: true }).fill('挿入した画像');
+  await page.getByLabel('画像の目的').fill('フォームで入力');
+  await page.screenshot({ path: `test-results/image-settings-${testInfo.project.name}.png` });
+  await page.getByRole('button', { name: '画像情報を適用' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.tiptap > p')).toHaveText(['before', 'after']);
+  await expect(page.locator('.tiptap > :nth-child(2)')).toHaveClass(/attached-image/);
+  await page.locator('.attached-image img').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '画像の詳細設定' }).click();
+  await expect(page.getByLabel('画像の目的')).toHaveValue('フォームで入力');
+  await page.getByLabel('キャプション', { exact: true }).fill('変更した画像');
+  await page.getByRole('button', { name: '画像情報を適用' }).click();
+  await expect(page.locator('figcaption')).toHaveText('変更した画像');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.locator('.tiptap').focus(); await page.keyboard.press('Control+z');
+  await expect(page.locator('figcaption')).toHaveText('挿入した画像');
+});
+
+test('table cells, row and column changes, code language and syntax persist', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.locator('.tiptap').fill('const answer = 42;');
+  await page.getByRole('button', { name: 'コード', exact: true }).click();
+  await page.getByLabel('コード言語').selectOption('javascript');
+  await expect(page.locator('pre')).toHaveAttribute('data-language', 'javascript');
+  await expect(page.locator('.syntax-keyword')).toHaveText('const');
+  await page.locator('pre').click(); await page.keyboard.press('Control+End'); await page.keyboard.press('Control+Enter');
+  await page.getByRole('button', { name: '表を挿入' }).click();
+  await page.getByLabel('行数', { exact: true }).fill('2'); await page.getByLabel('列数', { exact: true }).fill('2');
+  await page.getByRole('button', { name: '挿入', exact: true }).click();
+  await page.locator('th p').first().fill('名前');
+  await page.keyboard.press('Tab'); await page.keyboard.insertText('値');
+  await page.keyboard.press('Tab'); await page.keyboard.insertText('テスト');
+  await page.getByRole('button', { name: '行を追加', exact: true }).click();
+  await expect(page.locator('.tiptap tr')).toHaveCount(3);
+  await page.locator('td p').first().click();
+  await page.getByRole('button', { name: '列を追加', exact: true }).click();
+  await expect(page.locator('.tiptap tr').first().locator('th')).toHaveCount(3);
+  await page.screenshot({ path: `test-results/rich-editor-${testInfo.project.name}.png`, fullPage: true });
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('pre')).toHaveAttribute('data-language', 'javascript');
+  await expect(page.locator('.syntax-number')).toHaveText('42');
+  await expect(page.locator('table')).toContainText('名前');
+  await expect(page.locator('table')).toContainText('テスト');
+});
+
+test('code conversion targets only selected text', async ({ page }) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.locator('.tiptap').fill('before selected after');
+  await selectText(page, '.tiptap p', 7, 15);
+  await page.getByRole('button', { name: 'コード', exact: true }).click();
+  await expect(page.locator('.tiptap pre')).toHaveText('selected');
+  await expect(page.locator('.tiptap p')).toHaveText(['before ', ' after']);
+});
+
+test('article links resolve by ID and guard unsaved navigation; cancel preserves selection text', async ({ page }) => {
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.getByLabel('文書名').fill('リンク先');
+  await page.locator('.tiptap').fill('リンク先の本文');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  const target = page.url();
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  const source = page.url(); expect(source).not.toBe(target);
+  await page.locator('.tiptap').fill('この記事を開く');
+  await selectText(page, '.tiptap p', 0, 7);
+  await page.getByRole('button', { name: 'リンクの挿入', exact: true }).click();
+  await page.getByLabel('リンクURL').fill('javascript:alert(1)');
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await expect(page.locator('.tiptap a')).toHaveCount(0);
+  await expect(page.locator('.tiptap')).toHaveText('この記事を開く');
+  await selectText(page, '.tiptap p', 0, 7);
+  await page.getByRole('button', { name: 'リンクの挿入', exact: true }).click();
+  await page.getByLabel('リンクURL').fill(target);
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.locator('.tiptap').focus(); await page.keyboard.press('Control+End'); await page.keyboard.insertText('未保存');
+  await page.getByRole('button', { name: '編集を終了', exact: true }).click();
+  await page.locator('.tiptap a').click();
+  await expect(page.getByRole('dialog', { name: '未保存の変更' })).toBeVisible();
+  await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  expect(page.url()).toBe(source);
+  await page.locator('.tiptap a').click();
+  await page.getByRole('button', { name: '破棄して移動', exact: true }).click();
+  await expect(page.locator('.tiptap')).toHaveText('リンク先の本文');
+  expect(page.url()).toBe(target);
+  await page.goto(source);
+  await expect(page.locator('.tiptap a')).toHaveText('この記事を開く');
+});

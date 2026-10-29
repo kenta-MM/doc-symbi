@@ -2,12 +2,14 @@ import { test, expect } from '../helpers/folder-page';
 import { fixtureDocument } from '../fixtures/documents';
 import { test as freshTest } from '@playwright/test';
 
-freshTest('first selection remains usable when remembering the folder fails, preserving the unsaved draft', async ({ page }) => {
+freshTest('browser storage survives initial folder selection and can be copied when handle persistence fails', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
-  await page.locator('.tiptap').fill('保存先未選択から復旧した本文');
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('保存済み');
+  await page.locator('.tiptap').fill('ブラウザ内で保持した本文');
   await page.keyboard.press('Control+s');
-  await expect(page.getByRole('alert')).toContainText('記事の保存フォルダーを選択してください');
+  await expect(page.getByRole('status')).toContainText('保存済み');
   await page.evaluate(() => {
     Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () =>
       (await navigator.storage.getDirectory()).getDirectoryHandle('first-selection', { create: true }) });
@@ -20,19 +22,12 @@ freshTest('first selection remains usable when remembering the folder fails, pre
   await page.getByRole('button', { name: '保存フォルダーを選択' }).click();
   await expect(page.getByRole('note')).toContainText('次回用の保存先を記憶できませんでした');
   await expect(page.locator('.document-sidebar')).toContainText('保存先: first-selection');
-  await expect(page.locator('.tiptap')).toContainText('保存先未選択から復旧した本文');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('保存済み');
-  const contents = await page.evaluate(async () => {
-    const directory = await (await navigator.storage.getDirectory()).getDirectoryHandle('first-selection');
-    const values: string[] = [];
-    for await (const handle of (directory as unknown as { values(): AsyncIterable<FileSystemFileHandle> }).values()) {
-      values.push(await (await handle.getFile()).text());
-    }
-    return values;
-  });
-  expect(contents).toHaveLength(1);
-  expect(JSON.parse(contents[0]!).blocks[0].text).toBe('保存先未選択から復旧した本文');
+  await page.getByRole('button', { name: 'ブラウザ内の記事をコピー' }).click();
+  await expect(page.getByRole('status')).toContainText('1件をコピー');
+  await page.locator('.document-link').click();
+  await expect(page.locator('.tiptap')).toContainText('ブラウザ内で保持した本文');
+  await page.goto('/tests/harness.html');
+  expect(await page.evaluate(async () => (await window.createRepositoryTest().list()).length)).toBe(1);
 });
 
 test('a new repository restores the selected folder before saving without UI initialization', async ({ page }) => {
@@ -47,7 +42,7 @@ test('a new repository restores the selected folder before saving without UI ini
   await page.goto('/');
   await page.locator('.document-link').click();
   await expect(page.locator('.tiptap')).toHaveAttribute('contenteditable', 'false');
-  await expect(page.locator('.document-link.active')).toContainText(fixtureDocument().title);
+  await expect(page.locator('.document-title')).toContainText(fixtureDocument().title);
 });
 
 test('reinitialization does not clear an active folder selection when remembered data is absent', async ({ page }) => {
@@ -75,7 +70,7 @@ test('reinitialization does not clear an active folder selection when remembered
 });
 
 test('folder handle persistence failure preserves selection and a later retry clears the warning', async ({ page }) => {
-  await expect(page.locator('.document-sidebar')).toContainText('保存先: articles');
+  await expect(page.locator('.storage-status')).toContainText('articles');
   await expect(page.locator('.document-sidebar')).not.toContainText('このブラウザに保存');
   await page.evaluate(() => {
     const original = IDBObjectStore.prototype.put;
@@ -94,6 +89,8 @@ test('folder handle persistence failure preserves selection and a later retry cl
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByRole('note')).toHaveCount(0);
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('フォルダー選択後の新規文書');
   await page.keyboard.press('Control+s');
   await expect(page.getByRole('status')).toContainText('保存済み');
@@ -114,6 +111,8 @@ test('legacy migration copies once and retains the IndexedDB original', async ({
 
 test('folder change guards unsaved edits and picker cancellation retains the original', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('変更中の本文');
   await page.getByRole('button', { name: '保存フォルダーを変更' }).click();
   await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
@@ -124,7 +123,7 @@ test('folder change guards unsaved edits and picker cancellation retains the ori
   await page.getByRole('button', { name: '保存フォルダーを変更' }).click();
   await page.getByRole('button', { name: '破棄して移動' }).click();
   await expect(page.getByRole('button', { name: '保存フォルダーを変更' })).toBeEnabled();
-  await expect(page.locator('.document-sidebar')).toContainText('保存先: articles');
+  await expect(page.locator('.storage-status')).toContainText('articles');
   await expect(page.locator('.tiptap')).toContainText('変更中の本文');
   await page.keyboard.press('Control+s');
   await expect(page.getByRole('status')).toContainText('保存済み');
@@ -132,6 +131,8 @@ test('folder change guards unsaved edits and picker cancellation retains the ori
 
 test('revoked permission keeps edits and reconnect enables retry', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('権限復旧まで保持');
   await page.evaluate(() => {
     const prototype = FileSystemHandle.prototype as FileSystemHandle & {

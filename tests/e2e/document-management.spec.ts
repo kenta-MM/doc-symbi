@@ -1,6 +1,8 @@
 import { expect, test } from '../helpers/folder-page';
 test('unsaved navigation cancellation and confirmed deletion target the correct document', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('保存済み');
   await page.locator('.tiptap').fill('保持する本文');
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '未保存の変更' })).toBeVisible();
@@ -19,11 +21,13 @@ test('same-name documents remain distinct after rename and reload; blank name is
   await page.goto('/');
   for (const text of ['first body', 'second body']) {
     await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
     await page.locator('.tiptap').fill(text);
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   }
-  await expect(page.locator('.document-link')).toHaveCount(2);
+  await expect(page.locator('.document-title')).toHaveText('無題の文書');
   const name = page.getByRole('textbox', { name: '文書名' });
   await name.fill('  '); await name.press('Tab');
   await expect(page.getByRole('alert')).toBeVisible();
@@ -32,8 +36,10 @@ test('same-name documents remain distinct after rename and reload; blank name is
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: /名前変更/ }).click();
+  await expect(page.locator('.document-title')).toHaveText('名前変更');
   await expect(page.locator('.tiptap')).toContainText('second body');
+  await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
+  await expect(page.locator('.document-link')).toHaveCount(2);
   await page.getByRole('button', { name: /無題の文書/ }).click();
   await expect(page.locator('.tiptap')).toContainText('first body');
 });

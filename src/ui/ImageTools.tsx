@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ImageBlock } from '../domain/schema';
-import { emptyImageSemantics, imageByteLimit, imageFileSchema, imageSemanticsSchema, imageSource } from '../domain/image';
-import type { EditorCommand } from '../domain/commands';
+import { emptyImageSemantics, imageByteLimit, imageFileSchema } from '../domain/image';
+import { ImageInformation } from './ImageInformation';
 
 async function readImage(file: File, id: string) {
   if (!file.size || file.size > imageByteLimit) throw new Error('画像は 3 MiB 以内にしてください');
@@ -21,6 +21,7 @@ export function ImageAttachment({ insert, newId }: { insert: (block: ImageBlock)
   const input = useRef<HTMLInputElement>(null);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const [pending, setPending] = useState<ImageBlock | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return <><button disabled={busy} onClick={() => input.current?.click()}>{busy ? '画像を読み込み中…' : '画像を添付'}</button>
@@ -28,34 +29,8 @@ export function ImageAttachment({ insert, newId }: { insert: (block: ImageBlock)
       const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
       setBusy(true); setError('');
       void readImage(file, newId()).then(image => {
-        if (alive.current) insert({ kind: 'image', id: newId(), metadata: {}, file: image, caption: file.name, alt: '', semantics: emptyImageSemantics() });
+        if (alive.current) setPending({ kind: 'image', id: newId(), metadata: {}, file: image, caption: file.name, alt: '', semantics: emptyImageSemantics() });
       }).catch(error => { if (alive.current) setError(error instanceof Error ? error.message : '画像を添付できません'); })
         .finally(() => { if (alive.current) setBusy(false); });
-    }} />{error && <span role="alert">{error}</span>}</>;
-}
-
-export function ImageInformation({ block, execute }: { block: ImageBlock; execute: (command: EditorCommand) => void }) {
-  const [caption, setCaption] = useState(block.caption);
-  const [alt, setAlt] = useState(block.alt);
-  const [json, setJson] = useState(JSON.stringify(block.semantics, null, 2));
-  const [error, setError] = useState('');
-  useEffect(() => { setCaption(block.caption); setAlt(block.alt); setJson(JSON.stringify(block.semantics, null, 2)); setError(''); }, [block]);
-  return <section className="image-information" aria-label="画像の情報">
-    <p>{block.file.fileName} · {block.file.mimeType} · {block.file.width} × {block.file.height} · {Math.ceil(block.file.byteLength / 1024)} KiB</p>
-    <label>キャプション<input value={caption} onChange={event => setCaption(event.target.value)} /></label>
-    <label>代替テキスト<input value={alt} onChange={event => setAlt(event.target.value)} /></label>
-    <details><summary>AI向け構造化データ</summary>
-      <p>purpose：目的 / summary：要約 / entities：構成要素（id・label・role） / relationships：関係（from・to・meaning） / readingOrder：要素IDの読み順 / assumptions：前提・省略 / sources：出典（title・url・accessedAt）。空欄は未記述です。添付内容を自動推測して埋めることはありません。</p>
-      <textarea aria-label="AI向け構造化データ JSON" spellCheck={false} rows={16} value={json} onChange={event => setJson(event.target.value)} />
-    </details>
-    <button onClick={() => {
-      try {
-        const semantics = imageSemanticsSchema.parse(JSON.parse(json));
-        execute({ type: 'describeImage', id: block.id, caption, alt, semantics }); setError('');
-      } catch (error) { setError(error instanceof Error ? error.message : '情報データを確認してください'); }
-    }}>画像情報を適用</button>
-    <button onClick={() => { const link = window.document.createElement('a'); link.href = imageSource(block.file); link.download = block.file.fileName; link.click(); }}>画像を取り出す</button>
-    {error && <p role="alert">{error}</p>}
-    <p>適用後は文書を保存してください。画像情報も元に戻す／やり直すの対象です。</p>
-  </section>;
+    }} />{error && <span role="alert">{error}</span>}{pending && <ImageInformation block={pending} close={() => setPending(null)} apply={block => { insert(block); setPending(null); }} />}</>;
 }

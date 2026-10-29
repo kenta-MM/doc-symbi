@@ -6,11 +6,13 @@ test('prepared app survives offline reload and editing', async ({ page, context 
   await page.goto('/');
   await expect(page.getByText('オフライン利用の準備完了', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('オフラインの本文');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await context.setOffline(true); await page.reload();
-  await page.getByRole('button', { name: /無題の文書/ }).click();
+  await expect(page.locator('.document-title')).toHaveText('無題の文書');
   await expect(page.locator('.tiptap')).toContainText('オフラインの本文');
   await page.getByRole('button', { name: '編集', exact: true }).click();
   await page.locator('.tiptap').fill('オフラインで追記');
@@ -26,6 +28,8 @@ test('cold start after browser shutdown and server shutdown uses the same isolat
     const page = await browser.newPage(); await prepareFolder(page, server.origin);
     await expect(page.getByText('オフライン利用の準備完了', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
     await page.locator('.tiptap').fill('再起動で保持');
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();

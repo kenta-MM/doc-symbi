@@ -2,6 +2,8 @@ import { test, expect } from '../helpers/folder-page';
 
 test('rename retains one portable file and external changes reject stale saves', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('最初の本文');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('保存済み');
@@ -30,14 +32,13 @@ test('rename retains one portable file and external changes reject stale saves',
   await expect(page.getByRole('alert')).toContainText('外部で変更');
   page.on('dialog', dialog => dialog.accept());
   await page.reload();
-  await page.getByRole('button', { name: /外部の変更/ }).click();
-  await expect(page.locator('.document-link')).toHaveCount(1);
+  await expect(page.locator('.document-title')).toHaveText('外部の変更');
+  await expect(page.locator('.document-title')).toHaveCount(1);
   await expect(page.locator('.tiptap')).toContainText('最初の本文');
 });
 
 test('failed first write can be retried without an empty corrupt article', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
-  await page.locator('.tiptap').fill('失わない本文');
   await page.evaluate(() => {
     const original = FileSystemFileHandle.prototype.createWritable;
     FileSystemFileHandle.prototype.createWritable = async function () {
@@ -45,11 +46,14 @@ test('failed first write can be retried without an empty corrupt article', async
       throw new DOMException('容量不足', 'QuotaExceededError');
     };
   });
-  await page.keyboard.press('Control+s');
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('保存失敗');
-  await page.getByRole('button', { name: '保存を再試行' }).click();
+  await expect(page.getByRole('button', { name: '保存を再試行' })).toBeVisible();
+  await page.locator('.tiptap').fill('失わない本文');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.reload();
+  await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
   await page.locator('.document-link').click();
   await expect(page.locator('.tiptap')).toContainText('失わない本文');
 });

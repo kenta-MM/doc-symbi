@@ -13,6 +13,6 @@ test('unknown nodes, marks, attributes and extra item paragraphs are rejected', 
   for (const body of [
     { type: 'doc', content: [{ type: 'image' }] },
     { type: 'doc', content: [{ type: 'paragraph', attrs: { id: document.blocks[0]!.id, metadata: {}, extra: 1 } }] },
-    { type: 'doc', content: [{ type: 'paragraph', attrs: { id: document.blocks[0]!.id, metadata: {} }, content: [{ type: 'text', text: 'a', marks: [{ type: 'bold' }] }] }] },
+    { type: 'doc', content: [{ type: 'paragraph', attrs: { id: document.blocks[0]!.id, metadata: {} }, content: [{ type: 'text', text: 'a', marks: [{ type: 'unknown' }] }] }] },
   ]) expect(() => fromEditor(body, document)).toThrow();
 });

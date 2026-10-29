@@ -16,6 +16,7 @@ export class DocumentSession {
   private queue: Promise<void> = Promise.resolve();
   private pending = 0;
   private loadRequest = 0;
+  private creationFolder = '';
   constructor(readonly repository: DocumentRepository, readonly environment: DocumentEnvironment) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.state;
@@ -26,9 +27,10 @@ export class DocumentSession {
     this.state = { ...this.state, ...change };
     for (const listener of this.listeners) listener();
   }
-  create(title: string): void {
+  create(title: string, folderPath = ''): void {
     if (this.pending) throw new Error('保存の完了を待ってください');
     this.loadRequest++;
+    this.creationFolder = folderPath;
     this.update({ document: createDocument(title, this.environment), baseRevision: null, savedSnapshot: null, generation: 0, loadVersion: this.state.loadVersion + 1, draftTitle: null, dirty: true, saveState: 'unsaved', error: null });
   }
   close(): void {
@@ -80,7 +82,7 @@ export class DocumentSession {
       const revision = this.state.baseRevision;
       this.update({ saveState: 'saving', error: null });
       try {
-        const saved = revision === null ? await this.repository.create(snapshot) : await this.repository.save(snapshot, revision);
+        const saved = revision === null ? await this.repository.create(snapshot, this.creationFolder) : await this.repository.save(snapshot, revision);
         const dirty = this.state.draftTitle !== null || (generation !== this.state.generation && !equivalent(this.state.document, snapshot));
         this.update({ baseRevision: saved.revision, savedSnapshot: snapshot, dirty, saveState: dirty ? 'unsaved' : 'saved', error: null });
       } catch (error) {

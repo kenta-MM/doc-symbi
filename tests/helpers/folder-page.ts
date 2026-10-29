@@ -9,7 +9,7 @@ export async function prepareFolder(page: Page, url = 'http://localhost:4173/') 
       (await navigator.storage.getDirectory()).getDirectoryHandle('articles', { create: true }) });
   });
   await page.getByRole('button', { name: /保存フォルダーを(選択|変更)/ }).click();
-  await expect(page.locator('.document-sidebar')).toContainText('保存先: articles');
+  await expect(page.getByRole('navigation', { name: 'フォルダ階層' }).getByRole('button', { name: '▱ articles', exact: true })).toBeVisible();
 }
 export const test = base.extend({
   page: async ({ page, context }, use, testInfo) => {

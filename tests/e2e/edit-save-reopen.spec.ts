@@ -2,6 +2,8 @@ import { expect, test } from '../helpers/folder-page';
 test('create, edit Japanese and emoji, save and reopen', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.getByRole('textbox', { name: '文書名' }).fill('はじめての文書');
   await page.getByRole('textbox', { name: '文書名' }).press('Tab');
   await page.locator('.tiptap').fill('日本語 😀\n  本文');
@@ -16,11 +18,13 @@ test('create, edit Japanese and emoji, save and reopen', async ({ page }) => {
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('button', { name: '保存済み', exact: true })).toBeDisabled();
   await page.reload();
-  await page.getByRole('button', { name: /はじめての文書/ }).click();
+  await expect(page.locator('.document-title')).toHaveText('はじめての文書');
   await expect(page.locator('.tiptap')).toContainText('日本語 😀');
 });
 test('storage failure displays failure and preserves current and saved content', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('正常保存');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
@@ -33,6 +37,6 @@ test('storage failure displays failure and preserves current and saved content',
   await expect(page.locator('.tiptap')).toContainText('現在の編集');
   page.on('dialog', dialog => dialog.accept());
   await page.reload();
-  await page.getByRole('button', { name: /無題の文書/ }).click();
+  await expect(page.locator('.document-title')).toHaveText('無題の文書');
   await expect(page.locator('.tiptap')).toContainText('正常保存');
 });

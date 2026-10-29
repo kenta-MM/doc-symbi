@@ -3,13 +3,15 @@ import { fixtureDocument } from '../fixtures/documents';
 
 test('empty documents reopen, unsupported imports leave saved data untouched, and editing can resume', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await expect(page.locator('.tiptap')).toHaveText('');
   await expect(page.getByText('見出しはまだありません')).toBeVisible();
   await page.keyboard.press('Control+s');
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.reload();
   await expect(page.locator('.tiptap')).toHaveText('');
-  await expect(page.locator('.document-link')).toHaveCount(1);
+  await expect(page.locator('.document-title')).toHaveCount(1);
   const base = fixtureDocument();
   for (const [text, reason] of [
     ['{broken', 'JSON'],
@@ -19,7 +21,7 @@ test('empty documents reopen, unsupported imports leave saved data untouched, an
     await page.getByLabel('文書を読み込む').setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from(text!) });
     await expect(page.getByRole('alert')).toBeVisible();
     if (reason) await expect(page.getByRole('alert')).toContainText(reason);
-    await expect(page.locator('.document-link')).toHaveCount(1);
+    await expect(page.locator('.document-title')).toHaveCount(1);
     await expect(page.locator('.tiptap')).toHaveText('');
   }
   await page.reload();

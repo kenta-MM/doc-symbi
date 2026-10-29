@@ -18,5 +18,5 @@ export function HistoryToolbar({ editor }: { editor: EditorPort | null }) {
     window.addEventListener('keydown', key, true);
     return () => { window.removeEventListener('keydown', key, true); unsubscribe?.(); };
   }, [editor]);
-  return <div className="history-tools"><span className="muted">Ctrl+S で保存 · Ctrl+Z で取り消し · Ctrl+Y / Ctrl+Shift+Z でやり直し</span><span aria-live="polite">{message && <span role="note">{message}</span>}</span></div>;
+  return message ? <div className="history-message muted" role="note" aria-live="polite">{message}</div> : null;
 }

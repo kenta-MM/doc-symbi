@@ -1,9 +1,16 @@
-.ai-settings{max-width:440px}
-.ai-settings>label{display:block;margin-bottom:8px;font-weight:600}
+.app-header .settings-trigger{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.dialog.app-settings-dialog{width:min(800px,100%);padding:0;display:flex;flex-direction:column;overflow:hidden}
+.app-settings-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--line);flex-shrink:0}
+.app-settings-header h2{margin:0}
+.app-settings-dialog button{margin:0}
+.app-settings-body{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:320px;overflow:auto}
+.app-settings-nav{padding:20px 12px;background:#f6f8f7;border-right:1px solid var(--line)}
+.app-settings-nav button{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;text-align:left;border:0;border-radius:8px;background:#e2ece6;color:var(--green);font-weight:600}
+.ai-settings{padding:24px 30px;min-width:0}
+.ai-settings h2{margin:0 0 12px}
+.ai-settings>label{display:block;margin:20px 0 8px;font-weight:600}
 .ai-settings>select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:white}
-.ai-settings dl{padding:16px;background:#f4f7f4;border-radius:8px;font-size:14px}
-.ai-settings dl>div+div{margin-top:12px}
-.ai-settings dt{font-weight:600}
-.ai-settings dd{margin:4px 0 0}
-.ai-settings-note{font-size:13px;color:#526358;line-height:1.7}
-.ai-settings-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.ai-settings .ai-settings-note{font-size:13px;color:#526358;line-height:1.7;background:#f6f8f7;padding:12px 16px;border-radius:8px}
+.ai-settings-actions{display:flex;justify-content:flex-end;gap:12px;padding:16px 24px;border-top:1px solid var(--line);flex-shrink:0}
+.ai-settings-actions button{min-width:96px}
+@media(max-width:600px){.app-settings-body{grid-template-columns:1fr;min-height:0}.app-settings-nav{padding:10px 16px;border-right:0;border-bottom:1px solid var(--line)}.app-settings-nav button{width:auto;min-width:100px;padding:8px 16px}.ai-settings{padding:20px}.app-settings-header{padding:16px 20px}.ai-settings-actions{padding:16px 20px}}

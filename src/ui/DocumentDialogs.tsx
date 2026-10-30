@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-export function DocumentDialog({ label, children, close }: { label: string; children: ReactNode; close?: () => void }) {
+export function DocumentDialog({ label, children, close, className }: { label: string; children: ReactNode; close?: () => void; className?: string }) {
   const section = useRef<HTMLElement>(null), onClose = useRef(close); onClose.current = close;
   useEffect(() => {
     const previous = window.document.activeElement as HTMLElement | null;
@@ -13,5 +13,5 @@ export function DocumentDialog({ label, children, close }: { label: string; chil
     node.addEventListener('keydown', key);
     return () => { node.removeEventListener('keydown', key); if (previous?.isConnected) previous.focus(); };
   }, []);
-  return <div className="modal-backdrop"><section ref={section} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} className="dialog">{children}</section></div>;
+  return <div className="modal-backdrop"><section ref={section} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} className={`dialog ${className ?? ""}`}>{children}</section></div>;
 }

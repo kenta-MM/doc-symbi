@@ -36,7 +36,7 @@ test('cold start after browser shutdown and server shutdown uses the same isolat
     await browser.close(); await server.close(); serverClosed = true;
     browser = await chromium.launchPersistentContext(profile, { headless: true, serviceWorkers: 'allow', offline: true });
     const reopened = await browser.newPage(); await reopened.goto(server.origin);
-    await reopened.getByRole('button', { name: /無題の文書/ }).click();
+    await reopened.getByRole('button', { name: /無題の文書/ }).dblclick();
     await expect(reopened.locator('.tiptap')).toContainText('再起動で保持');
     await reopened.getByRole('button', { name: '編集', exact: true }).click();
     await reopened.locator('.tiptap').fill('サーバーなしで編集');

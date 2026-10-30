@@ -19,10 +19,10 @@ test('20 raw measurements of 1000-block / 100000-character editing', async ({ pa
   const painted = () => page.evaluate(() => new Promise<number>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now())))));
   for (let run = 1; run <= 20; run++) {
     await page.goto('/');
-    await page.locator('.document-link').filter({ hasText: small.title }).click();
+    await page.locator('.document-link').filter({ hasText: small.title }).dblclick();
     await expect(page.locator('.tiptap > *')).toHaveCount(1);
     await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
-    const start = await now(); await page.locator('.document-link').filter({ hasText: document.title }).click();
+    const start = await now(); await page.locator('.document-link').filter({ hasText: document.title }).dblclick();
     await expect(page.locator('.tiptap > *')).toHaveCount(1000);
     const display = await painted() - start;
     await page.getByRole('button', { name: '編集', exact: true }).click();

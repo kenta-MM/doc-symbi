@@ -47,6 +47,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [creating, setCreating] = useState(false);
   const [folders, setFolders] = useState<string[]>(['']);
   const [selectedFolder, setSelectedFolder] = useState('');
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState('');
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [folderAction, setFolderAction] = useState<'create' | 'rename' | 'delete' | null>(null);
@@ -54,6 +55,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [folderError, setFolderError] = useState('');
   const [folderBusy, setFolderBusy] = useState(false);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const selectedDocument = documents.find(row => row.id === selectedDocumentId);
   const [editor, setEditor] = useState<EditorPort | null>(null);
   const [error, setError] = useState('');
   const title = state.draftTitle ?? state.document?.title ?? '';
@@ -206,7 +208,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         setEditingId(session.state.document!.id); setCreating(false);
         try { await session.save(); await refresh(); setError(''); } catch (error) { report(error); }
       }} /> : !state.document ? <>
-        <DocumentCatalog key={catalogVersion} menu={setMenu} rootName={folder ?? 'ブラウザ内保存'} documents={documents} folders={folders} folder={selectedFolder} selectFolder={setSelectedFolder} tagFilter={tagFilter} setTagFilter={setTagFilter} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} />
+        <DocumentCatalog selectedId={selectedDocumentId} select={setSelectedDocumentId} key={catalogVersion} menu={setMenu} rootName={folder ?? 'ブラウザ内保存'} documents={documents} folders={folders} folder={selectedFolder} selectFolder={setSelectedFolder} tagFilter={tagFilter} setTagFilter={setTagFilter} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} />
       </> : <>
         <div className="editing-layout" style={{ '--properties-width': `${propertiesWidth}px` } as CSSProperties}><div className="document-canvas">
           {editable ? <div className="document-title document-heading"><input aria-label="文書名" title={title} value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { if (!editable) return; try { session.rename(title); } catch (error) { report(error); setTitle(state.document!.title); } }} /></div> : <h2 className="document-title">{title}</h2>}
@@ -222,7 +224,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         changeDraft={value => setAiDrafts(previous => ({ ...previous, [JSON.stringify([state.document?.id ?? null, aiProvider])]: value }))}>
         {state.document ? <DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
           try { const current = session.state.document!; session.accept({ ...current, metadata: { ...current.metadata, ...values }, updatedAt: session.environment.clock() }); } catch (error) { report(error); }
-        }} /> : <p className="ai-empty-properties">文書を開くと、文書情報を確認できます。</p>}
+        }} /> : selectedDocument ? <DocumentProperties document={selectedDocument} folder={selectedDocument.folderPath ?? ''} editable={false} change={() => {}} /> : <p className="ai-empty-properties">一覧で文書を選択すると、文書情報を確認できます。</p>}
       </AiChatPanel>
     </div>
     {folderAction && <DocumentDialog label="フォルダ操作" close={() => { if (!folderBusy) setFolderAction(null); }}><h2>{folderAction === 'create' ? 'フォルダ作成' : folderAction === 'rename' ? 'フォルダ名を変更' : 'フォルダを削除'}</h2>

@@ -54,6 +54,6 @@ test('failed first write can be retried without an empty corrupt article', async
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.reload();
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(page.locator('.tiptap')).toContainText('失わない本文');
 });

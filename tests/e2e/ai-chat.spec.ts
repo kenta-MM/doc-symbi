@@ -18,7 +18,7 @@ test('AI panel keeps drafts by document and provider and supports narrow screens
   await input.fill('Claudeへの下書き');
   await page.getByLabel('チャットで使うAI').selectOption('codex');
   await expect(input).toHaveValue('新人向けの導入ガイドを作って');
-  await page.locator('.catalog-table .document-link').click();
+  await page.locator('.catalog-table .document-link').dblclick();
   await expect(input).toHaveValue('');
   await page.getByRole('button', { name: 'この文書を要約して' }).click();
   await page.getByRole('tab', { name: '文書情報', exact: true }).click();

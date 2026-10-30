@@ -185,3 +185,6 @@
 .reading-workspace .sidebar-resize-handle.resize-left{left:0;right:auto}
 @media(min-width:701px){.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr) min(var(--properties-width,210px),50%)}}
 @media(max-width:700px){.app-shell .reading-workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(70px,20%) minmax(0,1fr)}.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(80px,25%);gap:8px}.reading-workspace .document-main{padding:8px}}
+
+.catalog-table tbody tr{cursor:pointer}
+.catalog-table tbody tr.selected{background:#e7f1eb;box-shadow:inset 3px 0 #347158}

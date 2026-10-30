@@ -19,7 +19,7 @@ test('waiting service worker does not reload unsaved edits and update uses the g
     await page.getByRole('button', { name: '更新版を適用' }).click();
     await page.getByRole('button', { name: '保存して移動' }).click();
     await expect(page.getByRole('region', { name: 'ドキュメント一覧' })).toBeVisible();
-    await page.getByRole('button', { name: /無題の文書/ }).click();
+    await page.getByRole('button', { name: /無題の文書/ }).dblclick();
     await expect(page.locator('.tiptap')).toContainText('更新前の未保存本文');
   } finally { await server.close(); }
 });

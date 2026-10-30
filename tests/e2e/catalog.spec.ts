@@ -33,7 +33,7 @@ test('create in a real nested folder, combine filters, edit metadata and return 
   await page.getByLabel('文書を検索').fill('別/詳細設計書/');
   await expect(page.locator('.document-link')).toHaveCount(0);
   await page.getByLabel('文書を検索').fill('EC/詳細設計書/');
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(page.locator('.tiptap')).toHaveAttribute('contenteditable', 'false');
   await page.getByRole('button', { name: '編集', exact: true }).click();
   await page.getByLabel('ドキュメントのステータス').selectOption('review');

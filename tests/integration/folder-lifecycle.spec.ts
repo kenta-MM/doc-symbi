@@ -38,7 +38,7 @@ test('a new repository restores the selected folder before saving without UI ini
   expect(result.name).toBe('articles');
   expect(result.documents).toHaveLength(1);
   await page.goto('/');
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(page.locator('.tiptap')).toHaveAttribute('contenteditable', 'false');
   await expect(page.locator('.document-title')).toContainText(fixtureDocument().title);
 });

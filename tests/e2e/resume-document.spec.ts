@@ -12,7 +12,7 @@ test('direct links reopen the document while root startup shows the library', as
     await expect(page.getByRole('status')).toContainText('保存済み');
   }
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
-  await page.locator('.document-link').filter({ hasText: '前回読んだ記事' }).click();
+  await page.locator('.document-link').filter({ hasText: '前回読んだ記事' }).dblclick();
   await expect(page.locator('.document-title')).toContainText('前回読んだ記事');
   await page.reload();
   await expect(page.locator('.document-title')).toContainText('前回読んだ記事');
@@ -40,7 +40,7 @@ test('reconnecting refreshes the library and preserves an existing draft', async
   await expect(page.getByRole('alert')).toContainText('保存先に再接続');
   await expect(page.getByRole('button', { name: '保存を再試行' })).toHaveCount(0);
   await page.getByRole('button', { name: 'フォルダを同期・再接続' }).click();
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(page.locator('.tiptap')).toHaveText('再接続で開く本文');
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByRole('button', { name: '新規作成', exact: true }).click();

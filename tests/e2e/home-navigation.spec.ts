@@ -23,6 +23,6 @@ test('app name returns home, resets search and guards unsaved edits', async ({ p
   await expect(page.getByRole('region', { name: 'ドキュメント一覧' })).toBeVisible();
   await expect(page.getByLabel('フォルダで絞り込み')).toHaveValue('');
   await expect(page).not.toHaveURL(/article=/);
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(page.locator('.tiptap')).toContainText('未保存の本文');
 });

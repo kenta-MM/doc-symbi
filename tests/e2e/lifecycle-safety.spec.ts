@@ -11,7 +11,7 @@ test('discard and reload of the same ID replaces body and resets history', async
   await body.fill('discard me');
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
   await page.getByRole('button', { name: '破棄して移動' }).click();
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(body).toHaveText('saved body');
   await page.evaluate(async () => {
     const directory = await (await navigator.storage.getDirectory()).getDirectoryHandle('articles');
@@ -23,7 +23,7 @@ test('discard and reload of the same ID replaces body and resets history', async
     }
   });
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(body).toHaveText('external body');
   await page.getByRole('button', { name: '編集', exact: true }).click();
   await body.focus(); await page.keyboard.press('Control+z');

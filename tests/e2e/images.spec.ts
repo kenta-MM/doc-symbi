@@ -33,7 +33,7 @@ test('attach SVG, describe, undo/redo, save, export and restore in a clean profi
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.reload();
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
-  await page.locator('.document-link').first().click();
+  await page.locator('.document-link').first().dblclick();
   await expect(image).toHaveJSProperty('naturalWidth', 1000);
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '文書を取り出す', exact: true }).click();

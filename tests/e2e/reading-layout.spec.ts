@@ -11,7 +11,7 @@ test('reading controls share the breadcrumb row and all three panes scroll indep
     await window.createFileRepositoryTest().create(document);
   }, JSON.stringify(fixtureDocument()));
   await page.goto('/');
-  await page.locator('.catalog-table .document-link').click();
+  await page.locator('.catalog-table .document-link').dblclick();
   await page.getByRole('tab', { name: '文書情報', exact: true }).click();
   await expect(page.locator('.workspace-toolbar')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '情報を閉じる' })).toHaveCount(0);

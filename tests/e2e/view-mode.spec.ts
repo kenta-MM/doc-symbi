@@ -26,7 +26,7 @@ test('view mode prevents changes, retains unsaved content and history, and is th
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.reload();
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
-  await page.locator('.document-link').click();
+  await page.locator('.document-link').dblclick();
   await expect(body).toHaveAttribute('contenteditable', 'false');
   await expect(body).toHaveText('保存前の本文');
   await page.getByRole('button', { name: '編集', exact: true }).click();

@@ -40,6 +40,6 @@ test('same-name documents remain distinct after rename and reload; blank name is
   await expect(page.locator('.tiptap')).toContainText('second body');
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
   await expect(page.locator('.document-link')).toHaveCount(2);
-  await page.getByRole('button', { name: /無題の文書/ }).click();
+  await page.getByRole('button', { name: /無題の文書/ }).dblclick();
   await expect(page.locator('.tiptap')).toContainText('first body');
 });

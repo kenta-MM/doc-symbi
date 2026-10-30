@@ -3,7 +3,7 @@ import { SidebarResizeHandle } from './SidebarResizeHandle';
 import { registerOffline } from '../offline/register';
 import { renameDocument } from '../domain/document';
 import { CreationMenu, type CreationTarget } from './CreationMenu';
-import { pathParts } from '../domain/catalog';
+import { documentProperties, pathParts } from '../domain/catalog';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { DocumentSession } from '../application/document-session';
 import type { DocumentSummary } from '../application/ports/document-repository';
@@ -32,14 +32,15 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   useEffect(() => registerOffline(() => {}).dispose, []);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [propertiesWidth, setPropertiesWidth] = useState(380);
-  const [sidePanel, setSidePanel] = useState<'chat' | 'properties' | null>('chat');
+  const [chatWidth, setChatWidth] = useState(254);
+  const [sidePanel, setSidePanel] = useState<'chat' | 'properties' | null>(null);
   const [aiProvider, setAiProvider] = useState(loadAiProviderId);
   const [aiDrafts, setAiDrafts] = useState<Record<string, string>>({});
   const [menu, setMenu] = useState<CreationTarget | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [destinationChoice, setDestinationChoice] = useState<'document' | 'folder' | null>(null);
   const [creationFolder, setCreationFolder] = useState('');
-  const [fileAction, setFileAction] = useState<{ action: 'rename' | 'delete'; file: DocumentSummary } | null>(null);
+  const [fileAction, setFileAction] = useState<{ action: 'rename' | 'delete' | 'addTags'; file: DocumentSummary } | null>(null);
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState('');
   const [fileBusy, setFileBusy] = useState(false);
@@ -193,9 +194,9 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       <button onClick={() => navigate(() => { session.close(); setSelectedFolder(''); })}>ドキュメント</button>
       {(documents.find(row => row.id === state.document!.id)?.folderPath ?? '').split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button onClick={() => navigate(() => { session.close(); setSelectedFolder(parts.slice(0, index + 1).join('/')); })}>{part}</button></span>)}
       <span> / {title}</span>
-      <div className="document-actions"><button onClick={() => setSidePanel('properties')}>文書情報</button><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button onClick={() => setDeleting(true)}>文書を削除</button>}</div>
+      <div className="document-actions"><button onClick={() => setSidePanel('properties')}>文書情報</button><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button className="danger" onClick={() => setDeleting(true)}>文書を削除</button>}</div>
     </nav>}
-    <div style={{ '--folder-width': `${sidebarWidth}px`, '--ai-panel-width': `${propertiesWidth}px` } as CSSProperties} className={`workspace ai-workspace ${sidePanel ? 'has-ai-panel' : ''} ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
+    <div style={{ '--folder-width': `${sidebarWidth}px`, '--ai-panel-width': `${sidePanel === 'chat' ? chatWidth : propertiesWidth}px` } as CSSProperties} className={`workspace ai-workspace ${sidePanel ? 'has-ai-panel' : ''} ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
       {state.document ? <aside className="document-sidebar outline-sidebar"><div className="outline-scroll"><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></div><SidebarResizeHandle width={sidebarWidth} resize={setSidebarWidth} label="アウトラインの幅" /></aside> :
       <FolderNavigation move={folder && session.repository.move ? (id, path, revision) => void moveDocument(id, path, revision) : undefined} width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
       <main className="document-main">
@@ -218,8 +219,8 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         </div></div>
       </>}
     </main>
-      <AiChatPanel open={sidePanel !== null} tab={sidePanel ?? 'chat'} selectTab={setSidePanel} close={() => setSidePanel(null)} width={propertiesWidth} resize={setPropertiesWidth}
-        providerId={aiProvider} selectProvider={setAiProvider} settings={() => setAiSettings(true)} documentTitle={state.document ? title : null} documentId={state.document?.id ?? null} documentContext={state.document ? JSON.stringify({ ...state.document, title }, (key, value) => key === 'file' ? undefined : value) : ''}
+      <AiChatPanel open={sidePanel !== null} tab={sidePanel ?? 'chat'} selectTab={setSidePanel} close={() => setSidePanel(null)} width={sidePanel === 'chat' ? chatWidth : propertiesWidth} resize={sidePanel === 'chat' ? setChatWidth : setPropertiesWidth}
+        providerId={aiProvider} settings={() => setAiSettings(true)} documentTitle={state.document ? title : null} documentId={state.document?.id ?? null} documentContext={state.document ? JSON.stringify({ ...state.document, title }, (key, value) => key === 'file' ? undefined : value) : ''}
         draft={aiDrafts[JSON.stringify([state.document?.id ?? null, aiProvider])] ?? ''}
         changeDraft={value => setAiDrafts(previous => ({ ...previous, [JSON.stringify([state.document?.id ?? null, aiProvider])]: value }))}>
         {state.document ? <DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
@@ -229,7 +230,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     </div>
     {folderAction && <DocumentDialog label="フォルダ操作" close={() => { if (!folderBusy) setFolderAction(null); }}><h2>{folderAction === 'create' ? 'フォルダ作成' : folderAction === 'rename' ? 'フォルダ名を変更' : 'フォルダを削除'}</h2>
       <p>対象: {folder ?? 'ルート'}/{folderTarget}</p>{folderAction === 'delete' ? <p>このフォルダと配下のすべてのフォルダ・ファイルを削除します。この操作は元に戻せません。</p> : <label>フォルダ名<input aria-label="フォルダ名" value={folderName} onChange={event => setFolderName(event.target.value)} /></label>}
-      {folderError && <p role="alert">{folderError}</p>}<button disabled={folderBusy} onClick={() => setFolderAction(null)}>キャンセル</button><button disabled={folderBusy || (folderAction !== 'delete' && !folderName.trim())} onClick={() => {
+      {folderError && <p role="alert">{folderError}</p>}<button disabled={folderBusy} onClick={() => setFolderAction(null)}>キャンセル</button><button className={folderAction === 'delete' ? 'danger' : undefined} disabled={folderBusy || (folderAction !== 'delete' && !folderName.trim())} onClick={() => {
         setFolderBusy(true); setFolderError('');
         void (async () => {
           if (folderAction !== 'delete' && pathParts(folderName).length !== 1) throw new Error('フォルダ名は1つの名前で入力してください');
@@ -253,19 +254,24 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       if (target.kind === 'file') {
         const file = documents.find(item => item.id === target.id);
         if (!file) { report(new Error('対象ファイルが見つかりません。一覧を再読み込みしてください')); return; }
-        setFileAction({ action, file }); setFileName(file.title); setFileError('');
-      } else if (target.folder) {
+        setFileAction({ action, file }); setFileName(action === 'addTags' ? '' : file.title); setFileError('');
+      } else if (target.folder && action !== 'addTags') {
         setFolderTarget(target.folder); setFolderAction(action); setFolderName(target.folder.split('/').at(-1)!); setFolderError('');
       }
     }} refresh={() => void synchronizeFolders()} busy={storageBusy || !storageReady} />}
-    {fileAction && <DocumentDialog label="ファイル操作" close={() => { if (!fileBusy) setFileAction(null); }}><h2>{fileAction.action === 'rename' ? 'ファイル名を変更' : 'ファイルを削除'}</h2><p>対象: {folder ?? 'ブラウザ内保存'}/{fileAction.file.folderPath ? fileAction.file.folderPath + '/' : ''}{fileAction.file.title}</p>
-      {fileAction.action === 'rename' ? <label>ファイル名<input aria-label="ファイル名" value={fileName} onChange={event => setFileName(event.target.value)} /></label> : <p>このファイルを削除します。この操作は元に戻せません。</p>}
-      {fileError && <p role="alert">{fileError}</p>}<button disabled={fileBusy} onClick={() => setFileAction(null)}>キャンセル</button><button disabled={fileBusy || (fileAction.action === 'rename' && !fileName.trim())} onClick={() => {
+    {fileAction && <DocumentDialog label="ファイル操作" close={() => { if (!fileBusy) setFileAction(null); }}><h2>{fileAction.action === 'rename' ? 'ファイル名を変更' : fileAction.action === 'addTags' ? 'タグの追加' : 'ファイルを削除'}</h2><p>対象: {folder ?? 'ブラウザ内保存'}/{fileAction.file.folderPath ? fileAction.file.folderPath + '/' : ''}{fileAction.file.title}</p>
+      {fileAction.action === 'rename' ? <label>ファイル名<input aria-label="ファイル名" value={fileName} onChange={event => setFileName(event.target.value)} /></label> : fileAction.action === 'addTags' ? <label className="tag-entry">追加するタグ<input aria-label="追加するタグ" placeholder="カンマ区切り" value={fileName} onChange={event => setFileName(event.target.value)} /></label> : <p>このファイルを削除します。この操作は元に戻せません。</p>}
+      {fileError && <p role="alert">{fileError}</p>}<button disabled={fileBusy} onClick={() => setFileAction(null)}>キャンセル</button><button className={fileAction.action === 'delete' ? 'danger' : undefined} disabled={fileBusy || (fileAction.action === 'rename' && !fileName.trim()) || (fileAction.action === 'addTags' && !fileName.split(/[,、]/).some(tag => tag.trim()))} onClick={() => {
         setFileBusy(true); setFileError('');
         void (async () => {
           const { file, action } = fileAction;
           if (action === 'delete') await session.repository.delete(file.id, file.revision);
-          else {
+          else if (action === 'addTags') {
+            const current = await session.repository.get(file.id);
+            if (current.revision !== file.revision) throw new Error('ファイルが外部で変更されています。一覧を再読み込みしてください');
+            const tags = [...new Set([...documentProperties(current.document).tags, ...fileName.split(/[,、]/).map(tag => tag.trim()).filter(Boolean)])];
+            await session.repository.save({ ...current.document, updatedAt: session.environment.clock(), metadata: { ...current.document.metadata, tags } }, file.revision);
+          } else {
             if (pathParts(fileName).length !== 1) throw new Error('ファイル名は1つの名前で入力してください');
             const current = await session.repository.get(file.id);
             if (current.revision !== file.revision) throw new Error('ファイルが外部で変更されています。一覧を再読み込みしてください');
@@ -289,7 +295,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         const action = pending; setPending(null); await action();
       }).catch(report); }}>保存して移動</button>
     </DocumentDialog>}
-    {deleting && state.document && <DocumentDialog label="文書の削除"><h2>「{state.document.title}」を削除しますか？</h2><p>{state.document.id}</p><p>{storage ? '保存先の記事ファイルと未保存の変更を削除します。この操作は元に戻せません。' : '未保存の変更も削除されます。'}</p><button onClick={() => setDeleting(false)}>キャンセル</button><button onClick={() => {
+    {deleting && state.document && <DocumentDialog label="文書の削除"><h2>「{state.document.title}」を削除しますか？</h2><p>{state.document.id}</p><p>{storage ? '保存先の記事ファイルと未保存の変更を削除します。この操作は元に戻せません。' : '未保存の変更も削除されます。'}</p><button onClick={() => setDeleting(false)}>キャンセル</button><button className="danger" onClick={() => {
 
       void deleteCurrentDocument(session).then(() => { setDeleting(false); return refresh(); }).catch(report);
     }}>削除する</button></DocumentDialog>}

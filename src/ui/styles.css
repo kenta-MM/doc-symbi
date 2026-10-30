@@ -55,10 +55,10 @@
 @media(max-width:1100px){:root{--sidebar:205px}.document-main{padding:24px 18px}.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr)}.document-properties{position:static}.document-properties label{display:inline-block;width:45%;vertical-align:top;margin-right:5%}.outline-sidebar .outline{max-height:calc(100vh - 40px)}}
 @media(max-width:700px){.app-header{padding-inline:14px}.workspace-toolbar{padding:8px 14px}.workspace{display:block}.library-sidebar{max-height:300px}.outline-sidebar{max-height:220px;padding:14px}.outline-sidebar .outline{position:static;max-height:180px}.document-main{padding:20px 12px}.catalog h2{font-size:22px}.catalog-search{flex-wrap:wrap}.catalog-search select{max-width:none}.catalog-filters select{max-width:100%}.catalog-table table{min-width:650px}.creation-columns{grid-template-columns:1fr}.creation-columns>div+div{border-left:0;border-top:1px solid var(--line)}.creation-columns>div{padding:20px}.document-title{padding:22px;font-size:23px}.reading-workspace .tiptap{padding:24px 20px}.breadcrumbs{padding:8px 12px}}
 
-.creation-menu { position: fixed; z-index: 1000; width: 280px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; padding: 8px; border: 1px solid #d4ded9; border-radius: 12px; background: white; color: #173f35; box-shadow: 0 10px 35px #12382d30; }
-.creation-menu p { margin: 4px 8px; overflow-wrap: anywhere; }
-.creation-menu small { display: block; margin: 4px 8px 10px; color: #65736d; overflow-wrap: anywhere; }
-.creation-menu button { display: block; width: 100%; text-align: left; border: 0; background: #f3f6f4; margin-top: 4px; padding: 12px; color: #173f35; }
+.creation-menu { position: fixed; z-index: 1000; width: 240px; font-size: 14px; line-height: 1.4; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; padding: 8px; border: 1px solid #d4ded9; border-radius: 12px; background: white; color: #173f35; box-shadow: 0 10px 35px #12382d30; }
+.creation-menu p { font-size: 13px; margin: 2px 6px; overflow-wrap: anywhere; }
+.creation-menu small { display: block; font-size: 12px; margin: 4px 6px 8px; color: #65736d; overflow-wrap: anywhere; }
+.creation-menu button { display: block; width: 100%; text-align: left; border: 0; background: #f3f6f4; margin-top: 4px; padding: 6px 10px; font-size: 14px; line-height: 20px; color: #173f35; }
 .creation-menu button:hover, .creation-menu button:focus-visible { background: #dfeae4; outline: 2px solid #245a45; }
 .folder-tree { min-height: 160px; }
 .catalog-table { min-height: 180px; }
@@ -186,5 +186,15 @@
 @media(min-width:701px){.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr) min(var(--properties-width,210px),50%)}}
 @media(max-width:700px){.app-shell .reading-workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(70px,20%) minmax(0,1fr)}.reading-workspace .editing-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(80px,25%);gap:8px}.reading-workspace .document-main{padding:8px}}
 
+/* Destructive actions share red text, borders, and interaction states. */
+button.danger,.document-actions button.danger{color:#b42318;border-color:#e6aaa5;background:#fff1f0}
+button.danger:hover:not(:disabled){color:#912018;border-color:#d47770;background:#ffe1de}
+button.danger:focus-visible{outline-color:#b42318;background:#ffe1de}
+
 .catalog-table tbody tr{cursor:pointer}
 .catalog-table tbody tr.selected{background:#e7f1eb;box-shadow:inset 3px 0 #347158}
+
+.dialog .tag-entry{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:16px;font-size:14px}.dialog .tag-entry input{box-sizing:border-box;width:200px;max-width:100%;height:32px;padding:5px 8px;font-size:14px;line-height:20px}
+.dialog:has(.tag-entry)>button{font-size:14px;line-height:20px;padding:5px 12px;min-height:32px}
+
+.creation-menu-handle{cursor:grab;touch-action:none;user-select:none}.creation-menu-handle[data-dragging]{cursor:grabbing}

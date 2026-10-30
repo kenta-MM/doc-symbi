@@ -8,6 +8,8 @@ test('streams a reply, continues the conversation, and keeps Claude disabled', a
     await route.fulfill({ contentType: 'application/x-ndjson', body: '{"type":"delta","text":"文書の案です。","itemId":"reply"}\n{"type":"done","status":"completed"}\n' });
   });
   await page.goto('/');
+  await expect(page.locator('#ai-side-panel')).toBeHidden();
+  await page.getByRole('button', { name: 'AIチャット', exact: true }).click();
   await page.getByLabel('AIモデル').selectOption('test-model');
   const input = page.getByRole('textbox', { name: 'AIへの依頼' });
   await input.fill('導入文を書いて');
@@ -20,7 +22,10 @@ test('streams a reply, continues the conversation, and keeps Claude disabled', a
   expect(requests[0]?.model).toBe('test-model');
   await page.getByRole('button', { name: '新しい会話' }).click();
   await expect(page.locator('.ai-message')).toHaveCount(0);
-  await page.getByLabel('チャットで使うAI').selectOption('claude');
+  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await page.getByLabel('利用するAI').selectOption('claude');
+  await page.getByRole('dialog', { name: '設定', exact: true }).getByRole('button', { name: '保存', exact: true }).click();
+  await page.getByRole('button', { name: '設定を閉じる' }).click();
   await input.fill('依頼');
   await expect(page.getByRole('button', { name: 'AIに送信', exact: true })).toBeDisabled();
 });
@@ -28,17 +33,21 @@ test('streams a reply, continues the conversation, and keeps Claude disabled', a
 test('shows connection failures and can reconnect', async ({ page }) => {
   await page.route('**/api/ai/status', route => route.fulfill({ json: { connected: false, models: [], error: 'codex login を実行してください。' } }));
   await page.goto('/');
+  await expect(page.locator('#ai-side-panel')).toBeHidden();
+  await page.getByRole('button', { name: 'AIチャット', exact: true }).click();
   await expect(page.getByText('codex login を実行してください。', { exact: true })).toBeVisible();
   await page.route('**/api/ai/status', route => route.fulfill({ json: { connected: true, models: [] } }));
   await page.getByRole('button', { name: '再接続', exact: true }).click();
-  await expect(page.getByText('接続済み', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('AIモデル', { exact: true })).toBeVisible();
 });
 
 test('can stop a pending response and shows interrupted streams as errors', async ({ page }) => {
   await page.route('**/api/ai/status', route => route.fulfill({ json: { connected: true, models: [] } }));
   await page.route('**/api/ai/chat', () => {});
   await page.goto('/');
-  await expect(page.getByText('接続済み', { exact: true })).toBeVisible();
+  await expect(page.locator('#ai-side-panel')).toBeHidden();
+  await page.getByRole('button', { name: 'AIチャット', exact: true }).click();
+  await expect(page.getByLabel('AIモデル', { exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'AIへの依頼' }).fill('文書を書いて');
   await page.getByRole('button', { name: 'AIに送信', exact: true }).click();
   await page.getByRole('button', { name: '停止', exact: true }).click();

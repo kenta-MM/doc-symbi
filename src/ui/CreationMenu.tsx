@@ -13,8 +13,9 @@ export function creationEvents(open: OpenCreationMenu, folder: string | null, so
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) show(event);
   } };
 }
-export function CreationMenu({ target, root, close, choose, manage, refresh, busy }: { target: CreationTarget; root: string; close: () => void; choose: (kind: 'document' | 'folder') => void; manage: (action: 'rename' | 'delete') => void; refresh: () => void; busy: boolean }) {
+export function CreationMenu({ target, root, close, choose, manage, refresh, busy }: { target: CreationTarget; root: string; close: () => void; choose: (kind: 'document' | 'folder') => void; manage: (action: 'rename' | 'delete' | 'addTags') => void; refresh: () => void; busy: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   useLayoutEffect(() => {
     const node = ref.current!;
     const previous = document.activeElement as HTMLElement | null;
@@ -34,9 +35,31 @@ export function CreationMenu({ target, root, close, choose, manage, refresh, bus
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length]?.focus();
     }
-  }}><p>{target.source}</p><small>{target.kind === 'file' ? '保存先' : '作成先'}: {target.folder === null ? '選択してください' : `${root}/${target.folder}`}</small>
+  }}><div className="creation-menu-handle" title="ドラッグして移動" onPointerDown={event => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    event.preventDefault();
+    const rect = ref.current!.getBoundingClientRect();
+    drag.current = { pointerId: event.pointerId, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.dataset.dragging = 'true';
+  }} onPointerMove={event => {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    const node = ref.current!;
+    node.style.left = `${Math.max(8, Math.min(event.clientX - current.offsetX, window.innerWidth - node.offsetWidth - 8))}px`;
+    node.style.top = `${Math.max(8, Math.min(event.clientY - current.offsetY, window.innerHeight - node.offsetHeight - 8))}px`;
+  }} onPointerUp={event => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    drag.current = null;
+    delete event.currentTarget.dataset.dragging;
+  }} onLostPointerCapture={event => {
+    drag.current = null;
+    delete event.currentTarget.dataset.dragging;
+  }}><p>{target.source}</p><small>{target.kind === 'file' ? '保存先' : '作成先'}: {target.folder === null ? '選択してください' : `${root}/${target.folder}`}</small></div>
     {target.kind !== 'file' && <><button role="menuitem" onClick={() => choose('folder')}>フォルダを作成</button><button role="menuitem" onClick={() => choose('document')}>ドキュメントを作成</button></>}
-    {target.kind && <><button role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('rename')}>{target.kind === 'file' ? 'ファイル名を変更' : 'フォルダ名を変更'}</button><button role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('delete')}>{target.kind === 'file' ? 'ファイルを削除' : 'フォルダを削除'}</button></>}
+    {target.kind && <><button role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('rename')}>{target.kind === 'file' ? 'ファイル名を変更' : 'フォルダ名を変更'}</button><button className="danger" role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('delete')}>{target.kind === 'file' ? 'ファイルを削除' : 'フォルダを削除'}</button></>}
+    {target.kind === 'file' && <button role="menuitem" onClick={() => manage('addTags')}>タグの追加</button>}
     {target.refresh && <button role="menuitem" disabled={busy} onClick={refresh}>同期・再接続</button>}
     {target.kind === 'folder' && !target.folder && <small>保存先ルートの名前変更・削除はできません。</small>}
   </div>;

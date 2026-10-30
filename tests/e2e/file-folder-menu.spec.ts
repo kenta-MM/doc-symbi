@@ -20,7 +20,7 @@ test('folder and file menus rename, delete, create children and refresh external
   await expect(page.getByRole('status')).toContainText('保存済み');
   await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
   await tree.getByRole('button', { name: '旧文書', exact: true }).click({ button: 'right' });
-  await expect(page.getByRole('menuitem')).toHaveText(['ファイル名を変更', 'ファイルを削除']);
+  await expect(page.getByRole('menuitem')).toHaveText(['ファイル名を変更', 'ファイルを削除', 'タグの追加']);
   await page.getByRole('menuitem', { name: 'ファイル名を変更' }).click();
   await page.getByLabel('ファイル名', { exact: true }).fill('新文書'); await confirm();
   await expect(tree.getByRole('button', { name: '新文書', exact: true })).toBeVisible();
@@ -56,4 +56,50 @@ test('folder and file menus rename, delete, create children and refresh external
     const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('articles');
     const names = []; for await (const item of (dir as unknown as { values(): AsyncIterable<FileSystemHandle> }).values()) names.push(item.name); return names;
   })).toEqual([]);
+});
+
+test('catalog context menu selects its row and adds persistent tags only to that document', async ({ page }) => {
+  const catalog = page.getByRole('region', { name: 'ドキュメント一覧' });
+  for (const title of ['対象A', '対象B']) {
+    await page.getByRole('button', { name: '新規作成', exact: true }).click();
+    await page.getByLabel('新しいドキュメント名').fill(title);
+    await page.getByRole('button', { name: '作成して編集を開始' }).click();
+    await expect(page.getByRole('status')).toContainText('保存済み');
+    await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
+  }
+  const a = catalog.getByRole('row').filter({ hasText: '対象A' });
+  const b = catalog.getByRole('row').filter({ hasText: '対象B' });
+  await a.click();
+  await b.click({ button: 'right' });
+  await expect(b).toHaveClass('selected');
+  await expect(a).not.toHaveClass('selected');
+  const menu = page.getByRole('menu');
+  await expect(menu).toContainText('対象B');
+  const before = (await menu.boundingBox())!;
+  const handle = (await menu.locator('.creation-menu-handle').boundingBox())!;
+  await page.mouse.move(handle.x + 15, handle.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 95, handle.y + 60, { steps: 5 });
+  const moved = (await menu.boundingBox())!;
+  expect(moved.x).toBeCloseTo(before.x + 80, 0);
+  expect(moved.y).toBeCloseTo(before.y + 50, 0);
+  await page.mouse.move(0, 0, { steps: 5 });
+  await page.mouse.up();
+  const clamped = (await menu.boundingBox())!;
+  expect(clamped.x).toBe(8);
+  expect(clamped.y).toBe(8);
+  await expect(b).toHaveClass('selected');
+  await page.getByRole('menuitem', { name: 'タグの追加' }).click();
+  await expect(page.getByRole('button', { name: '実行', exact: true })).toBeDisabled();
+  await page.getByLabel('追加するタグ').fill('設計, レビュー、設計');
+  await page.getByRole('button', { name: '実行', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await b.getByRole('button').press('Shift+F10');
+  await page.getByRole('menuitem', { name: 'タグの追加' }).click();
+  await page.getByLabel('追加するタグ').fill('追加');
+  await page.getByRole('button', { name: '実行', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.reload();
+  await expect(b.locator('.tag')).toHaveText(['設計', 'レビュー', '追加']);
+  await expect(a.locator('.tag')).toHaveCount(0);
 });

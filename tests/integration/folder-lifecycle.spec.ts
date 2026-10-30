@@ -3,13 +3,8 @@ import { fixtureDocument } from '../fixtures/documents';
 import { test as freshTest } from '@playwright/test';
 
 freshTest('browser storage survives initial folder selection and can be copied when handle persistence fails', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: '新規作成', exact: true }).click();
-  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('保存済み');
-  await page.locator('.tiptap').fill('ブラウザ内で保持した本文');
-  await page.keyboard.press('Control+s');
-  await expect(page.getByRole('status')).toContainText('保存済み');
+  await page.goto('/tests/harness.html');
+  await page.evaluate(async text => { await window.createRepositoryTest().create(JSON.parse(text)); }, JSON.stringify(fixtureDocument()));
   await page.evaluate(() => {
     Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () =>
       (await navigator.storage.getDirectory()).getDirectoryHandle('first-selection', { create: true }) });
@@ -19,14 +14,17 @@ freshTest('browser storage survives initial folder selection and can be copied w
       return original.apply(this, args);
     };
   });
-  await page.getByRole('button', { name: '保存フォルダーを選択' }).click();
-  await expect(page.getByRole('note')).toContainText('次回用の保存先を記憶できませんでした');
-  await expect(page.locator('.document-sidebar')).toContainText('保存先: first-selection');
-  await page.getByRole('button', { name: 'ブラウザ内の記事をコピー' }).click();
-  await expect(page.getByRole('status')).toContainText('1件をコピー');
-  await page.locator('.document-link').click();
-  await expect(page.locator('.tiptap')).toContainText('ブラウザ内で保持した本文');
-  await page.goto('/tests/harness.html');
+  const result = await page.evaluate(async () => {
+    const repository = window.createFileRepositoryTest(true);
+    await repository.choose();
+    const count = await repository.migrate();
+    const rows = await repository.list();
+    return { name: repository.name, warning: repository.warning, count, document: (await repository.get(rows[0]!.id)).document };
+  });
+  expect(result.warning).toContain('次回用の保存先を記憶できませんでした');
+  expect(result.name).toBe('first-selection');
+  expect(result.count).toBe(1);
+  expect(result.document).toEqual(fixtureDocument());
   expect(await page.evaluate(async () => (await window.createRepositoryTest().list()).length)).toBe(1);
 });
 
@@ -70,9 +68,10 @@ test('reinitialization does not clear an active folder selection when remembered
 });
 
 test('folder handle persistence failure preserves selection and a later retry clears the warning', async ({ page }) => {
-  await expect(page.locator('.storage-status')).toContainText('articles');
-  await expect(page.locator('.document-sidebar')).not.toContainText('このブラウザに保存');
+  await page.goto('/tests/harness.html');
   await page.evaluate(() => {
+    Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () =>
+      (await navigator.storage.getDirectory()).getDirectoryHandle('articles', { create: true }) });
     const original = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (...args) {
       if (this.name === 'settings') {
@@ -82,51 +81,56 @@ test('folder handle persistence failure preserves selection and a later retry cl
       return original.apply(this, args);
     };
   });
-  await page.getByRole('button', { name: '保存フォルダーを変更' }).click();
-  await expect(page.getByRole('note')).toContainText('保存先を記憶できません');
-  await expect(page.getByRole('button', { name: '新規作成', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: '保存フォルダーを変更' }).click();
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.getByRole('note')).toHaveCount(0);
-  await page.getByRole('button', { name: '新規作成', exact: true }).click();
-  await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
-  await page.locator('.tiptap').fill('フォルダー選択後の新規文書');
-  await page.keyboard.press('Control+s');
-  await expect(page.getByRole('status')).toContainText('保存済み');
+  const result = await page.evaluate(async text => {
+    const document = JSON.parse(text);
+    const repository = window.createFileRepositoryTest();
+    await repository.choose();
+    const warning = repository.warning;
+    await repository.create(document);
+    await repository.choose();
+    return { warning, after: repository.warning, name: repository.name, document: (await repository.get(document.id)).document };
+  }, JSON.stringify(fixtureDocument()));
+  expect(result.warning).toContain('保存先を記憶できません');
+  expect(result.after).toBeNull();
+  expect(result.name).toBe('articles');
+  expect(result.document).toEqual(fixtureDocument());
 });
 
 test('legacy migration copies once and retains the IndexedDB original', async ({ page }) => {
   await page.goto('/tests/harness.html');
   await page.evaluate(async text => { await window.createRepositoryTest().create(JSON.parse(text)); }, JSON.stringify(fixtureDocument()));
-  await page.goto('/');
-  await page.getByRole('button', { name: 'ブラウザ内の記事をコピー' }).click();
-  await expect(page.getByRole('status')).toContainText('1件をコピー');
-  await expect(page.locator('.document-link')).toHaveCount(1);
-  await page.getByRole('button', { name: 'ブラウザ内の記事をコピー' }).click();
-  await expect(page.getByRole('status')).toContainText('0件をコピー');
-  await page.goto('/tests/harness.html');
+  const counts = await page.evaluate(async () => {
+    const repository = window.createFileRepositoryTest(true);
+    await repository.restore();
+    return [await repository.migrate(), await repository.migrate(), (await repository.list()).length];
+  });
+  expect(counts).toEqual([1, 0, 1]);
   expect(await page.evaluate(async () => (await window.createRepositoryTest().list()).length)).toBe(1);
 });
 
-test('folder change guards unsaved edits and picker cancellation retains the original', async ({ page }) => {
+test('returning to folders guards unsaved edits and picker cancellation retains the original', async ({ page }) => {
   await page.getByRole('button', { name: '新規作成', exact: true }).click();
   await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('変更中の本文');
-  await page.getByRole('button', { name: '保存フォルダーを変更' }).click();
+  await page.getByRole('button', { name: 'DocSymbi', exact: true }).click();
   await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
-  await expect(page.locator('.tiptap')).toContainText('変更中の本文');
-  await page.evaluate(() => {
-    Object.defineProperty(window, 'showDirectoryPicker', { value: async () => { throw new DOMException('Cancelled', 'AbortError'); } });
-  });
-  await page.getByRole('button', { name: '保存フォルダーを変更' }).click();
-  await page.getByRole('button', { name: '破棄して移動' }).click();
-  await expect(page.getByRole('button', { name: '保存フォルダーを変更' })).toBeEnabled();
-  await expect(page.locator('.storage-status')).toContainText('articles');
   await expect(page.locator('.tiptap')).toContainText('変更中の本文');
   await page.keyboard.press('Control+s');
   await expect(page.getByRole('status')).toContainText('保存済み');
+  await page.goto('/tests/harness.html');
+  const result = await page.evaluate(async () => {
+    const repository = window.createFileRepositoryTest();
+    await repository.restore();
+    const before = await repository.list();
+    Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => { throw new DOMException('Cancelled', 'AbortError'); } });
+    let error = '';
+    try { await repository.choose(); } catch (failure) { error = (failure as Error).name; }
+    return { error, name: repository.name, before, after: await repository.list() };
+  });
+  expect(result.error).toBe('AbortError');
+  expect(result.name).toBe('articles');
+  expect(result.after).toEqual(result.before);
 });
 
 test('revoked permission keeps edits and reconnect enables retry', async ({ page }) => {

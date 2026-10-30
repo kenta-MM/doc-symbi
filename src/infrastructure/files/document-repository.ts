@@ -260,6 +260,34 @@ export class FileDocumentRepository implements DocumentRepository, FolderStorage
     }), document.id);
   }
 
+  async move(id: string, folderPath: string, expectedRevision: number): Promise<void> {
+    pathParts(folderPath);
+    await this.operation(() => navigator.locks.request('docsymbi-file-write', async () => {
+      const item = (await this.scan()).get(id);
+      if (!item) throw new RepositoryError('NotFound', '移動する記事が見つかりません');
+      if (item.revision !== expectedRevision) throw new RepositoryError('Conflict', '記事が変更されています。同期してから移動してください');
+      if (item.folderPath === folderPath) return;
+      const target = await this.at(folderPath);
+      for await (const entry of target.values()) if (entry.name === item.name) throw new RepositoryError('Conflict', '移動先に同名のファイルが存在します');
+      const source = await item.directory.getFileHandle(item.name);
+      const file = await source.getFile();
+      if (await revision(await file.text()) !== expectedRevision) throw new RepositoryError('Conflict', '記事が外部で変更されています');
+      const copy = await target.getFileHandle(item.name, { create: true });
+      try {
+        const stream = await copy.createWritable();
+        try { await stream.write(file); await stream.close(); }
+        catch (error) { await stream.abort().catch(() => undefined); throw error; }
+        if (await revision(await (await copy.getFile()).text()) !== expectedRevision) throw new Error('移動先のファイルを検証できません');
+        if (await revision(await (await source.getFile()).text()) !== expectedRevision) throw new RepositoryError('Conflict', '記事が外部で変更されたため移動を中止しました');
+      } catch (error) { await target.removeEntry(item.name).catch(() => undefined); throw error; }
+      try { await item.directory.removeEntry(item.name); }
+      catch {
+        // Keep the verified copy if source deletion fails; never risk losing both.
+        throw new Error('コピーは完了しましたが元の記事を削除できませんでした。両方のフォルダを確認してください');
+      }
+    }), id);
+  }
+
   async migrate() {
     let count = 0;
     const existing = await this.scan();

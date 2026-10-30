@@ -7,8 +7,8 @@ import { IndexedDbRepository } from '../../src/infrastructure/indexeddb/document
 import { FileDocumentRepository } from '../../src/infrastructure/files/document-repository';
 import { equivalent } from '../../src/domain/equivalence';
 
-export function createEditorTest(index = 1) {
-  let document = validateDocument(documents[index]);
+export function createEditorTest(index = 1, input?: unknown) {
+  let document = validateDocument(input ?? documents[index]);
   const initial = structuredClone(document);
   const id = fixedIds(); for (let i = 0; i < 100; i++) id();
   const environment = { id, clock: () => fixedTime };
@@ -19,6 +19,8 @@ export function createEditorTest(index = 1) {
   editor.mount(document);
   return { initial, getDocument: () => document, errors,
     execute: (command: EditorCommand) => editor.execute(command, environment),
+    setEditable: (editable: boolean) => editor.setEditable(editable),
+    cursorContext: () => editor.cursorContext(),
     undo: () => editor.undo(), redo: () => editor.redo(),
     canUndo: () => editor.canUndo, canRedo: () => editor.canRedo,
     dispose: () => { editor.dispose(); host.remove(); },

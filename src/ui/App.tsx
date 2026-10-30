@@ -23,12 +23,18 @@ import { Outline } from './Outline';
 import { HistoryToolbar } from './HistoryToolbar';
 import type { FolderStorage } from '../application/ports/folder-storage';
 import { Icon } from './Icon';
+import { AiSettings } from './AiSettings';
+import { AiChatPanel } from './AiChatPanel';
+import { loadAiProviderId } from '../platform/ai-preferences';
 
 export function App({ session, createEditor, storage }: { session: DocumentSession; createEditor: (host: HTMLElement) => EditorPort; storage?: FolderStorage }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   useEffect(() => registerOffline(() => {}).dispose, []);
   const [sidebarWidth, setSidebarWidth] = useState(240);
-  const [propertiesWidth, setPropertiesWidth] = useState(210);
+  const [propertiesWidth, setPropertiesWidth] = useState(380);
+  const [sidePanel, setSidePanel] = useState<'chat' | 'properties' | null>('chat');
+  const [aiProvider, setAiProvider] = useState(loadAiProviderId);
+  const [aiDrafts, setAiDrafts] = useState<Record<string, string>>({});
   const [menu, setMenu] = useState<CreationTarget | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [destinationChoice, setDestinationChoice] = useState<'document' | 'folder' | null>(null);
@@ -61,6 +67,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [notice, setNotice] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [aiSettings, setAiSettings] = useState(false);
   const previousDocumentId = useRef<string | null>(null);
   const editable = !!state.document && editingId === state.document.id;
   useUnsavedWarning(requiresNavigationGuard(state));
@@ -139,6 +146,15 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     window.addEventListener('hashchange', hash); window.addEventListener('click', click);
     return () => { window.removeEventListener('hashchange', hash); window.removeEventListener('click', click); };
   });
+  async function moveDocument(id: string, path: string, revision: number) {
+    if (storageBusy || !storageReady || !session.repository.move) return;
+    setStorageBusy(true); setMenu(null);
+    try {
+      await session.repository.move(id, path, revision);
+      await refresh(); setSelectedFolder(path); setError('');
+    } catch (error) { report(error); }
+    finally { setStorageBusy(false); }
+  }
   async function synchronizeFolders() {
     if (storageBusy || !storageReady) return;
     setMenu(null); setStorageBusy(true);
@@ -166,7 +182,8 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     <header className="app-header"><div><span className="brand-mark">D</span><h1><button className="brand-home" title="ドキュメント一覧に戻る" onClick={() => navigate(() => {
         session.close(); setEditingId(null); setCreating(false); setSelectedFolder(''); setTagFilter(''); setMenu(null); setCatalogVersion(version => version + 1);
       })}>DocSymbi</button></h1><span className="tagline">構造から、伝わるドキュメントへ。</span></div>
-      <div className="header-actions"><button className="icon-button" aria-label="使い方" onClick={() => setHelp(true)}><Icon name="help" /></button><button className="primary" disabled={storageBusy || !storageReady} onClick={() => beginCreation('document', selectedFolder)}>新規作成</button></div></header>
+      <div className="header-actions"><button onClick={() => setAiSettings(true)}>AI設定</button><button aria-expanded={sidePanel === 'chat'} aria-controls="ai-side-panel" onClick={() => setSidePanel(sidePanel === 'chat' ? null : 'chat')}>AIチャット</button><button className="icon-button" aria-label="使い方" onClick={() => setHelp(true)}><Icon name="help" /></button><button className="primary" disabled={storageBusy || !storageReady} onClick={() => beginCreation('document', selectedFolder)}>新規作成</button></div></header>
+    {aiSettings && <AiSettings close={() => { setAiSettings(false); setAiProvider(loadAiProviderId()); }} />}
     {storage && !storage.supported && <p className="storage-warning">フォルダー保存にはデスクトップ版ChromeまたはEdgeを使用してください。</p>}
     {notice && <p className="storage-warning" role="status">{notice}</p>}
     {storage?.warning && <p className="storage-warning" role="note">{storage.warning}</p>}
@@ -174,13 +191,13 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       <button onClick={() => navigate(() => { session.close(); setSelectedFolder(''); })}>ドキュメント</button>
       {(documents.find(row => row.id === state.document!.id)?.folderPath ?? '').split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button onClick={() => navigate(() => { session.close(); setSelectedFolder(parts.slice(0, index + 1).join('/')); })}>{part}</button></span>)}
       <span> / {title}</span>
-      <div className="document-actions"><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button onClick={() => setDeleting(true)}>文書を削除</button>}</div>
+      <div className="document-actions"><button onClick={() => setSidePanel('properties')}>文書情報</button><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button onClick={() => setDeleting(true)}>文書を削除</button>}</div>
     </nav>}
-    <div style={{ '--folder-width': `${sidebarWidth}px` } as CSSProperties} className={`workspace ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
+    <div style={{ '--folder-width': `${sidebarWidth}px`, '--ai-panel-width': `${propertiesWidth}px` } as CSSProperties} className={`workspace ai-workspace ${sidePanel ? 'has-ai-panel' : ''} ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
       {state.document ? <aside className="document-sidebar outline-sidebar"><div className="outline-scroll"><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></div><SidebarResizeHandle width={sidebarWidth} resize={setSidebarWidth} label="アウトラインの幅" /></aside> :
-      <FolderNavigation width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
+      <FolderNavigation move={folder && session.repository.move ? (id, path, revision) => void moveDocument(id, path, revision) : undefined} width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
       <main className="document-main">
-      {(error || state.error) && <div role="alert" className="error-banner">{error || state.error?.message}{state.document && state.saveState === 'error' && <button onClick={() => void save()}>保存を再試行</button>}</div>}
+       {(error || state.error) && <div role="alert" className="error-banner">{error || state.error?.message}{storage && state.document && <button disabled={storageBusy || !storageReady} onClick={() => void synchronizeFolders()}>保存先に再接続</button>}{state.document && state.saveState === 'error' && <button onClick={() => void save()}>保存を再試行</button>}</div>}
       {creating && !folder && <p className="storage-warning">保存先フォルダが未設定のため、ドキュメントはブラウザ内に保存します。実ディレクトリに保存するには保存フォルダーを選択してください。</p>}
       {creating ? <NewDocument key={creationFolder} folders={folders} folder={creationFolder} cancel={() => setCreating(false)} create={async values => {
         if (storage?.name) await storage.folders?.();
@@ -196,11 +213,18 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
           {editable && <div className="sticky-editor-tools"><HistoryToolbar editor={editor} />
           <BlockToolbar key={state.document.id} document={state.document} editor={editor} environment={session.environment} /></div>}
           <EditorPane key={state.loadVersion} editable={editable} document={state.document} createEditor={createEditor} connect={connect} />
-        </div><div className="properties-pane"><SidebarResizeHandle width={propertiesWidth} resize={setPropertiesWidth} label="ドキュメント情報の幅" edge="left" /><DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
-          try { const current = session.state.document!; session.accept({ ...current, metadata: { ...current.metadata, ...values }, updatedAt: session.environment.clock() }); } catch (error) { report(error); }
-        }} /></div></div>
+        </div></div>
       </>}
-    </main></div>
+    </main>
+      <AiChatPanel open={sidePanel !== null} tab={sidePanel ?? 'chat'} selectTab={setSidePanel} close={() => setSidePanel(null)} width={propertiesWidth} resize={setPropertiesWidth}
+        providerId={aiProvider} selectProvider={setAiProvider} settings={() => setAiSettings(true)} documentTitle={state.document ? title : null} documentId={state.document?.id ?? null} documentContext={state.document ? JSON.stringify({ ...state.document, title }, (key, value) => key === 'file' ? undefined : value) : ''}
+        draft={aiDrafts[JSON.stringify([state.document?.id ?? null, aiProvider])] ?? ''}
+        changeDraft={value => setAiDrafts(previous => ({ ...previous, [JSON.stringify([state.document?.id ?? null, aiProvider])]: value }))}>
+        {state.document ? <DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
+          try { const current = session.state.document!; session.accept({ ...current, metadata: { ...current.metadata, ...values }, updatedAt: session.environment.clock() }); } catch (error) { report(error); }
+        }} /> : <p className="ai-empty-properties">文書を開くと、文書情報を確認できます。</p>}
+      </AiChatPanel>
+    </div>
     {folderAction && <DocumentDialog label="フォルダ操作" close={() => { if (!folderBusy) setFolderAction(null); }}><h2>{folderAction === 'create' ? 'フォルダ作成' : folderAction === 'rename' ? 'フォルダ名を変更' : 'フォルダを削除'}</h2>
       <p>対象: {folder ?? 'ルート'}/{folderTarget}</p>{folderAction === 'delete' ? <p>このフォルダと配下のすべてのフォルダ・ファイルを削除します。この操作は元に戻せません。</p> : <label>フォルダ名<input aria-label="フォルダ名" value={folderName} onChange={event => setFolderName(event.target.value)} /></label>}
       {folderError && <p role="alert">{folderError}</p>}<button disabled={folderBusy} onClick={() => setFolderAction(null)}>キャンセル</button><button disabled={folderBusy || (folderAction !== 'delete' && !folderName.trim())} onClick={() => {

@@ -14,6 +14,9 @@ export interface EditorPort {
   applyHeading(): void;
   applyAtCursor?(action: CursorAction, value?: string): void;
   insertAtCursor?(block: Block): void;
+  cancelInsertion?(): void;
+  setAutomaticInput?(enabled: boolean): void;
+  readonly automaticInput?: boolean;
   setLink?(href: string): void;
   cursorContext?(): CursorContext;
   onSelectionChange?(listener: () => void): () => void;

@@ -97,12 +97,15 @@ test('native list join rejects incompatible metadata without losing content or c
   const before = await page.evaluate(() => window.activeEditor.getDocument());
   // Select the boundary explicitly. The list Backspace shortcut may indent a
   // leaf instead of joining it; that is a valid edit and does not test merging.
-  await item.evaluate(async element => {
-    const previous = element.parentElement!.previousElementSibling!.querySelector('p')!;
-    (element.closest('.tiptap') as HTMLElement).focus();
-    window.getSelection()!.setBaseAndExtent(previous.lastChild!, previous.lastChild!.textContent!.length, element.firstChild!, 0);
-    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-  });
+  await expect.poll(async () => {
+    await item.evaluate(element => {
+      const previous = element.parentElement!.previousElementSibling!.querySelector('p')!;
+      (element.closest('.tiptap') as HTMLElement).focus();
+      window.getSelection()!.setBaseAndExtent(previous.lastChild!, previous.lastChild!.textContent!.length, element.firstChild!, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    return page.evaluate(() => window.activeEditor.cursorContext().selected);
+  }).toBe(true);
   await page.keyboard.press('Backspace');
   const result = await page.evaluate(() => ({ document: window.activeEditor.getDocument(), errors: window.activeEditor.errors }));
   expect(result.document).toEqual(before); expect(result.errors.length).toBeGreaterThan(0);

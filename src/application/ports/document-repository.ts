@@ -14,5 +14,6 @@ export interface DocumentRepository {
   create(document: Document, folderPath?: string): Promise<StoredDocument>;
   save(document: Document, expectedRevision: number): Promise<StoredDocument>;
   rename?(document: Document, expectedRevision: number): Promise<StoredDocument>;
+  move?(id: string, folderPath: string, expectedRevision: number): Promise<void>;
   delete(id: string, expectedRevision: number): Promise<void>;
 }

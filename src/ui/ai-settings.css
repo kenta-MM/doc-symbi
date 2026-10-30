@@ -1,0 +1,9 @@
+.ai-settings{max-width:440px}
+.ai-settings>label{display:block;margin-bottom:8px;font-weight:600}
+.ai-settings>select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:white}
+.ai-settings dl{padding:16px;background:#f4f7f4;border-radius:8px;font-size:14px}
+.ai-settings dl>div+div{margin-top:12px}
+.ai-settings dt{font-weight:600}
+.ai-settings dd{margin:4px 0 0}
+.ai-settings-note{font-size:13px;color:#526358;line-height:1.7}
+.ai-settings-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}

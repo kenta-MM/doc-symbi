@@ -9,13 +9,15 @@ import { acceptBodyChange } from '../domain/accept-body-change';
 import { equivalent } from '../domain/equivalence';
 import { editorNodes } from './schema';
 import { toEditor, fromEditor, encodeBlock } from './adapter';
-import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection, Selection } from '@tiptap/pm/state';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { safeLink, languageSchema } from '../domain/rich-text';
 import { assignIdentity } from './identity';
 import { plainTextPaste } from './input';
 import { executeCommand } from './transaction-bridge';
 import { applyHeading } from './apply-heading';
+import { InputAssistance } from './input-assistance';
+import { ImageInput } from './image-input';
 
 function textElements(document: Document): { id: string; text: string; metadata: Metadata }[] {
   const result: { id: string; text: string; metadata: Metadata }[] = [];
@@ -29,14 +31,24 @@ export class EditorController implements EditorPort {
   private listeners = new Set<(document: Document) => void>();
   private selectionListeners = new Set<() => void>();
   private dispatchFailure: Error | null = null;
+  private assistance: InputAssistance | undefined;
+  private imageInput: ImageInput | undefined;
   constructor(private readonly host: HTMLElement, private readonly current: () => Document,
     private readonly environment: DocumentEnvironment, private readonly onError: (error: Error) => void) {}
   mount(document: Document): void {
+    this.assistance?.dispose(); this.imageInput?.dispose();
     this.editor?.destroy();
     let validated: { node: ProseMirrorNode; document: Document } | null = null;
     const editor = new Editor({ element: this.host, extensions: [...editorNodes, editorHistory],
       content: toEditor(document), enableInputRules: false, enablePasteRules: false,
-      editorProps: { attributes: { role: 'textbox', 'aria-label': '文書本文', 'aria-multiline': 'true' }, handlePaste: plainTextPaste,
+      editorProps: { attributes: { role: 'textbox', 'aria-label': '文書本文', 'aria-multiline': 'true' },
+        handleTextInput: (_view, from, to, text) => this.assistance?.text(from, to, text) ?? false,
+        handlePaste: (view, event, slice) => {
+          if (!editor.isEditable) return true;
+          this.assistance?.interrupt();
+          return this.imageInput?.paste(event) || plainTextPaste(view, event, slice);
+        },
+        handleDrop: (_view, event) => { this.assistance?.interrupt(); return this.imageInput?.drop(event) ?? false; },
         handleDOMEvents: { contextmenu: (view, event) => {
           if (!editor.isEditable) return false;
           const figure = (event.target as HTMLElement).closest('figure');
@@ -45,13 +57,19 @@ export class EditorController implements EditorPort {
           event.preventDefault();
           this.host.dispatchEvent(new CustomEvent('editor-context', { bubbles: true, detail: { x: event.clientX, y: event.clientY, imageId: figure ? this.cursorContext().blockId : undefined } }));
           return true;
-        }, click: (_view, event) => {
+        }, dragover: (_view, event) => this.imageInput?.drag(event) ?? false,
+        dragleave: () => { this.imageInput?.clearMarker(); return false; },
+        dragend: () => { this.imageInput?.clearMarker(); return false; },
+        blur: () => { this.assistance?.interrupt(); return false; },
+        click: (_view, event) => {
           const anchor = (event.target as HTMLElement).closest('a');
           if (anchor && editor.isEditable) { event.preventDefault(); return true; }
           return false;
         } },
         handleKeyDown: (view, event) => {
           if (!editor.isEditable) return false;
+          if (event.isComposing || event.keyCode === 229 || view.composing) return false;
+          if (this.assistance?.key(event)) { event.preventDefault(); return true; }
           if (event.key === 'Enter' && this.cursorContext().inTable) {
             event.preventDefault();
             if (event.ctrlKey || event.metaKey) {
@@ -70,6 +88,7 @@ export class EditorController implements EditorPort {
           return true;
         },
       },
+      onTransaction: ({ transaction }) => { this.imageInput?.map(transaction); this.assistance?.update(); },
       onSelectionUpdate: () => { for (const listener of this.selectionListeners) listener(); },
       onUpdate: () => {
         const current = this.current();
@@ -85,6 +104,18 @@ export class EditorController implements EditorPort {
       try {
         if (transaction.docChanged) {
           if (!editor.isEditable) return;
+          // Tiptap's appended clearDocument transaction resets custom identity
+          // after validation. Perform that normalization here, preserving attrs.
+          const previous = editor.state.selection;
+          const first = transaction.doc.firstChild;
+          if (!transaction.getMeta('preventClearDocument') && !previous.empty
+            && previous.from === Selection.atStart(editor.state.doc).from && previous.to === Selection.atEnd(editor.state.doc).to
+            && transaction.doc.childCount === 1 && first && !first.textContent
+            && ['paragraph', 'heading', 'codeBlock', 'bulletList', 'orderedList'].includes(first.type.name)) {
+            transaction.replaceWith(0, first.nodeSize, editor.schema.nodes.paragraph!.create(editor.state.doc.firstChild?.attrs));
+            transaction.setSelection(TextSelection.create(transaction.doc, 1));
+          }
+          transaction.setMeta('preventClearDocument', true);
           assignIdentity(transaction, this.environment.id);
           const before = this.current();
           const candidate = fromEditor(transaction.doc.toJSON(), before);
@@ -110,6 +141,8 @@ export class EditorController implements EditorPort {
       } catch (error) { this.dispatchFailure = error instanceof Error ? error : new Error('編集を適用できません'); this.onError(this.dispatchFailure); }
     } });
     this.editor = editor;
+    this.assistance = new InputAssistance(editor, this.host, this.environment);
+    this.imageInput = new ImageInput(editor, this.environment, this.onError);
   }
   execute(command: EditorCommand, environment: DocumentEnvironment): void {
     if (!this.editor) throw new Error('Editor is not mounted');
@@ -124,6 +157,7 @@ export class EditorController implements EditorPort {
     focusHeading(editor, id);
   }
   setEditable(editable: boolean): void {
+    if (!editable) this.assistance?.interrupt();
     this.editor?.setEditable(editable, false);
     this.editor?.view.dom.setAttribute('aria-readonly', String(!editable));
   }
@@ -143,9 +177,13 @@ export class EditorController implements EditorPort {
   insertAtCursor(block: Block): void {
     if (!this.editor?.isEditable) return;
     this.dispatchFailure = null;
+    if (this.assistance?.insert(block)) { if (this.dispatchFailure) throw this.dispatchFailure; return; }
     this.editor.chain().focus().insertContent(encodeBlock(block)).run();
     if (this.dispatchFailure) throw this.dispatchFailure;
   }
+  cancelInsertion(): void { this.assistance?.cancel(); }
+  get automaticInput(): boolean { return this.assistance?.enabled ?? true; }
+  setAutomaticInput(enabled: boolean): void { this.assistance?.setEnabled(enabled); }
   setLink(href: string): void {
     if (!this.editor?.isEditable || this.editor.state.selection.empty) return;
     if (!safeLink(href)) throw new Error('http(s)・mailto・記事リンクを入力してください');
@@ -228,5 +266,5 @@ export class EditorController implements EditorPort {
   get canUndo(): boolean { return this.editor?.can().undo() ?? false; }
   get canRedo(): boolean { return this.editor?.can().redo() ?? false; }
   onAcceptedChange(listener: (document: Document) => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
-  dispose(): void { this.editor?.destroy(); this.editor = undefined; this.listeners.clear(); this.selectionListeners.clear(); }
+  dispose(): void { this.assistance?.dispose(); this.imageInput?.dispose(); this.editor?.destroy(); this.editor = undefined; this.listeners.clear(); this.selectionListeners.clear(); }
 }

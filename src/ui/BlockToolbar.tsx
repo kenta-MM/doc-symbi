@@ -20,6 +20,20 @@ export function BlockToolbar({ document, editor, environment }: { document: Docu
   }, []);
   const [link, setLink] = useState<string | null>(null), [error, setError] = useState('');
   const [table, setTable] = useState(false), [rows, setRows] = useState(3), [columns, setColumns] = useState(3), [header, setHeader] = useState(true);
+  const [automaticInput, setAutomaticInput] = useState(editor?.automaticInput ?? true);
+  useEffect(() => {
+    setAutomaticInput(editor?.automaticInput ?? true);
+    const open = (event: Event) => {
+      const kind = (event as CustomEvent<string>).detail;
+      setError('');
+      if (kind === 'table') setTable(true);
+      if (kind === 'quiz') setQuizId('new');
+    };
+    window.addEventListener('editor-insert-request', open);
+    return () => window.removeEventListener('editor-insert-request', open);
+  }, [editor]);
+  function closeTable() { setTable(false); editor?.cancelInsertion?.(); }
+  function closeQuiz() { setQuizId(null); editor?.cancelInsertion?.(); }
   useEffect(() => {
     const update = () => {
       const next = editor?.cursorContext?.() ?? { selected: false, inTable: false };
@@ -41,6 +55,7 @@ export function BlockToolbar({ document, editor, environment }: { document: Docu
   return <div className="block-tools" aria-label="ブロック操作">
     <div className="tool-row" onMouseDown={event => { if ((event.target as HTMLElement).closest('button')) event.preventDefault(); }}>
       <span className="tool-label">編集・追加</span>
+      <label><input type="checkbox" checked={automaticInput} onChange={event => { setAutomaticInput(event.target.checked); editor?.setAutomaticInput?.(event.target.checked); }} />記号の自動変換</label>
       {([['heading', '見出し'], ['bullet', '箇条書き'], ['ordered', '番号付きリスト'], ['code', 'コード'], ['bold', '太字']] as const).map(([key, label]) => <button key={key} onClick={() => action(key)}>{label}</button>)}
       <button disabled={!context.selected} onClick={openLink}>リンクの挿入</button>
       <ImageAttachment newId={environment.id} insert={block => editor?.insertAtCursor?.(block)} />
@@ -54,7 +69,7 @@ export function BlockToolbar({ document, editor, environment }: { document: Docu
       {context.inTable && <>{([['rowAdd', '行を追加'], ['rowDelete', '行を削除'], ['columnAdd', '列を追加'], ['columnDelete', '列を削除']] as const).map(([key, label]) => <button key={key} onClick={() => action(key)}>{label}</button>)}</>}
     </div>
     {error && link === null && <p role="alert">{error}</p>}
-    {quizId !== null && <QuizSettings key={quizId} {...(quiz?.kind === 'quiz' ? { initial: quiz.questions } : {})} close={() => setQuizId(null)} apply={questions => {
+    {quizId !== null && <QuizSettings key={quizId} {...(quiz?.kind === 'quiz' ? { initial: quiz.questions } : {})} close={closeQuiz} apply={questions => {
       if (quiz?.kind === 'quiz') editor?.execute({ type: 'updateQuiz', id: quiz.id, questions }, environment);
       else editor?.insertAtCursor?.({ kind: 'quiz', id: environment.id(), metadata: {}, questions });
     }} />}
@@ -65,8 +80,8 @@ export function BlockToolbar({ document, editor, environment }: { document: Docu
     {link !== null && <DocumentDialog label="リンクの挿入" close={() => setLink(null)}><h2>リンクの挿入</h2><form onSubmit={event => {
       event.preventDefault(); const href = link.trim(); if (!safeLink(href)) { setError('http(s)・mailto・記事リンクを入力してください'); return; } try { editor?.setLink?.(href); setLink(null); } catch (failure) { setError(failure instanceof Error ? failure.message : 'リンクを適用できません'); }
     }}><div className="link-entry"><input autoFocus aria-label="リンクURL" placeholder="https://…" value={link} onChange={event => setLink(event.target.value)} /><button type="submit">OK</button><button type="button" onClick={() => setLink(null)}>キャンセル</button></div>{error && <p role="alert">{error}</p>}</form></DocumentDialog>}
-    {table && <DocumentDialog label="表の挿入" close={() => setTable(false)}><h2>表の挿入</h2>{error && <p role="alert">{error}</p>}<form onSubmit={event => {
+    {table && <DocumentDialog label="表の挿入" close={closeTable}><h2>表の挿入</h2>{error && <p role="alert">{error}</p>}<form onSubmit={event => {
       event.preventDefault(); try { editor?.insertAtCursor?.({ kind: 'table', id: environment.id(), metadata: {}, rows: Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, () => ({ id: environment.id(), metadata: {}, text: '', header: header && row === 0 }))) }); setTable(false); } catch (failure) { setError(failure instanceof Error ? failure.message : '表を挿入できません'); }
-    }}><label>行数<input aria-label="行数" type="number" min={1} max={100} required value={rows} onChange={event => setRows(Number(event.target.value))} /></label><label>列数<input aria-label="列数" type="number" min={1} max={20} required value={columns} onChange={event => setColumns(Number(event.target.value))} /></label><label><input type="checkbox" checked={header} onChange={event => setHeader(event.target.checked)} />先頭行を見出しにする</label><button type="submit">挿入</button><button type="button" onClick={() => setTable(false)}>キャンセル</button></form></DocumentDialog>}
+    }}><label>行数<input aria-label="行数" type="number" min={1} max={100} required value={rows} onChange={event => setRows(Number(event.target.value))} /></label><label>列数<input aria-label="列数" type="number" min={1} max={20} required value={columns} onChange={event => setColumns(Number(event.target.value))} /></label><label><input type="checkbox" checked={header} onChange={event => setHeader(event.target.checked)} />先頭行を見出しにする</label><button type="submit">挿入</button><button type="button" onClick={closeTable}>キャンセル</button></form></DocumentDialog>}
   </div>;
 }

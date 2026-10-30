@@ -39,7 +39,7 @@ test('reconnecting refreshes the library and preserves an existing draft', async
   await page.reload();
   await expect(page.getByRole('alert')).toContainText('保存先に再接続');
   await expect(page.getByRole('button', { name: '保存を再試行' })).toHaveCount(0);
-  await page.getByRole('button', { name: '保存先に再接続' }).click();
+  await page.getByRole('button', { name: 'フォルダを同期・再接続' }).click();
   await page.locator('.document-link').click();
   await expect(page.locator('.tiptap')).toHaveText('再接続で開く本文');
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -47,6 +47,15 @@ test('reconnecting refreshes the library and preserves an existing draft', async
   await page.getByRole('button', { name: '作成して編集を開始', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
   await page.locator('.tiptap').fill('上書きしない下書き');
+  await page.evaluate(() => {
+    Object.defineProperty(FileSystemDirectoryHandle.prototype, 'queryPermission', { configurable: true, value: async () => 'denied' });
+    Object.defineProperty(FileSystemDirectoryHandle.prototype, 'requestPermission', { configurable: true, value: async () => {
+      Object.defineProperty(FileSystemDirectoryHandle.prototype, 'queryPermission', { configurable: true, value: async () => 'granted' });
+      return 'granted';
+    } });
+  });
+  await page.keyboard.press('Control+s');
+  await expect(page.getByRole('status', { name: '保存状態' })).toContainText('保存失敗');
   await page.getByRole('button', { name: '保存先に再接続' }).click();
   await expect(page.locator('.tiptap')).toHaveText('上書きしない下書き');
   await expect(page.locator('.tiptap')).toHaveAttribute('contenteditable', 'true');

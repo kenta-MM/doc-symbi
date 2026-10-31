@@ -26,7 +26,7 @@ export function FileTransfer({ session, navigate, refreshed, report, editable, l
       navigate(async () => {
         try {
           const initial = session.state;
-          if (file.size > limits.fileBytes) throw new Error('ファイルは 10 MiB 以内にしてください');
+          if (file.size > limits.transferBytes) throw new Error('持ち運び用JSONは画像を含めて256 MiB以内にしてください');
           const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
           if (session.state !== initial) throw new Error('文書が変更されたため読み込みを中止しました。もう一度選択してください');
           const stored = update && initial.document && initial.baseRevision !== null

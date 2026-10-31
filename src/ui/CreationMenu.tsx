@@ -13,7 +13,7 @@ export function creationEvents(open: OpenCreationMenu, folder: string | null, so
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) show(event);
   } };
 }
-export function CreationMenu({ target, root, close, choose, manage, refresh, busy }: { target: CreationTarget; root: string; close: () => void; choose: (kind: 'document' | 'folder') => void; manage: (action: 'rename' | 'delete' | 'addTags') => void; refresh: () => void; busy: boolean }) {
+export function CreationMenu({ target, root, close, choose, manage, refresh, busy, locked, toggleLock }: { target: CreationTarget; root: string; close: () => void; choose: (kind: 'document' | 'folder') => void; manage: (action: 'rename' | 'delete' | 'addTags') => void; refresh: () => void; busy: boolean; locked?: boolean | undefined; toggleLock?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   useLayoutEffect(() => {
@@ -57,6 +57,7 @@ export function CreationMenu({ target, root, close, choose, manage, refresh, bus
     drag.current = null;
     delete event.currentTarget.dataset.dragging;
   }}><p>{target.source}</p><small>{target.kind === 'file' ? '保存先' : '作成先'}: {target.folder === null ? '選択してください' : `${root}/${target.folder}`}</small></div>
+    {target.kind && toggleLock && <button role="menuitem" onClick={toggleLock}>{locked ? 'ロックを解除' : 'ロック'}</button>}
     {target.kind !== 'file' && <><button role="menuitem" onClick={() => choose('folder')}>フォルダを作成</button><button role="menuitem" onClick={() => choose('document')}>ドキュメントを作成</button></>}
     {target.kind && <><button role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('rename')}>{target.kind === 'file' ? 'ファイル名を変更' : 'フォルダ名を変更'}</button><button className="danger" role="menuitem" disabled={target.kind === 'folder' && !target.folder} onClick={() => manage('delete')}>{target.kind === 'file' ? 'ファイルを削除' : 'フォルダを削除'}</button></>}
     {target.kind === 'file' && <button role="menuitem" onClick={() => manage('addTags')}>タグの追加</button>}

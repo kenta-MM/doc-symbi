@@ -10,7 +10,7 @@ function inline(text: string, code = false, formatting: Formatting = []): JSONCo
     const to = boundaries[i + 1]!;
     const active = formatting.filter(range => range.from <= from && range.to >= to);
     const href = active.find(range => range.href)?.href;
-    const marks = [...(active.some(range => range.bold) ? [{ type: 'bold' }] : []), ...(href ? [{ type: 'link', attrs: { href } }] : [])];
+    const marks = [...(active.some(range => range.bold) ? [{ type: 'bold' }] : []), ...(active.some(range => range.code) ? [{ type: 'inlineCode' }] : []), ...(href ? [{ type: 'link', attrs: { href } }] : [])];
     return text.slice(from, to).split('\n').flatMap((part, index) => [
       ...(index ? [{ type: 'hardBreak', ...(marks.length ? { marks } : {}) }] : []), ...(part ? [{ type: 'text', text: part, ...(marks.length ? { marks } : {}) }] : []),
     ]);
@@ -26,11 +26,11 @@ export function encodeBlock(block: Block): JSONContent {
   const attrs = { id: block.id, metadata: block.metadata };
   switch (block.kind) {
     case 'quiz': return { type: 'quizBlock', attrs: { ...attrs, questions: block.questions } };
-    case 'table': return { type: 'table', attrs, content: block.rows.map(row => ({ type: 'tableRow', content: row.map(cell => ({ type: cell.header ? 'tableHeader' : 'tableCell', attrs: { id: cell.id, metadata: cell.metadata }, content: [{ type: 'paragraph', attrs: { id: null, metadata: {} }, content: inline(cell.text, false, cell.formatting) }] })) })) };
+    case 'table': return { type: 'table', attrs: { ...attrs, displaySize: block.displaySize ?? null }, content: block.rows.map(row => ({ type: 'tableRow', content: row.map(cell => ({ type: cell.header ? 'tableHeader' : 'tableCell', attrs: { id: cell.id, metadata: cell.metadata }, content: [{ type: 'paragraph', attrs: { id: null, metadata: {} }, content: inline(cell.text, false, cell.formatting) }] })) })) };
     case 'image': return { type: 'imageBlock', attrs: { ...attrs, file: block.file, caption: block.caption, alt: block.alt, semantics: block.semantics, displaySize: block.displaySize ?? null } };
     case 'list': return { type: block.style === 'bullet' ? 'bulletList' : 'orderedList', attrs, content: block.items.map(encodeItem) };
     case 'heading': return { type: 'heading', attrs: { ...attrs, level: block.level }, content: inline(block.text, false, block.formatting) };
-    case 'code': return { type: 'codeBlock', attrs: { ...attrs, language: block.language ?? null }, content: inline(block.text, true) };
+    case 'code': return { type: 'codeBlock', attrs: { ...attrs, language: block.language ?? null, width: block.width ?? null }, content: inline(block.text, true) };
     case 'paragraph': return { type: 'paragraph', attrs, content: inline(block.text, false, block.formatting) };
   }
 }
@@ -67,12 +67,13 @@ function decodeFormatting(node: JSONContent): { formatting?: Formatting } {
     const range: Formatting[number] = { from: offset, to: end };
     for (const mark of child.marks ?? []) {
       if (mark.type === 'bold' && !mark.attrs) range.bold = true;
+      else if (mark.type === 'inlineCode' && !mark.attrs) range.code = true;
       else if (mark.type === 'link' && mark.attrs && Object.keys(mark.attrs).length === 1) range.href = mark.attrs.href as string;
       else throw new Error('Unsupported mark');
     }
-    if (range.bold || range.href) {
+    if (range.bold || range.code || range.href) {
       const previous = ranges.at(-1);
-      if (previous && previous.to === offset && previous.bold === range.bold && previous.href === range.href) previous.to = end;
+      if (previous && previous.to === offset && previous.bold === range.bold && previous.code === range.code && previous.href === range.href) previous.to = end;
       else ranges.push(range);
     }
     offset = end;
@@ -81,14 +82,14 @@ function decodeFormatting(node: JSONContent): { formatting?: Formatting } {
 }
 function decodeBlock(input: unknown): unknown {
   const node = checkedNode(input);
-  const attributes = attrs(node, node.type === 'quizBlock' ? ['questions'] : node.type === 'heading' ? ['level'] : node.type === 'codeBlock' ? ['language'] : node.type === 'imageBlock' ? ['file', 'caption', 'alt', 'semantics', 'displaySize'] : []);
+  const attributes = attrs(node, node.type === 'table' ? ['displaySize'] : node.type === 'quizBlock' ? ['questions'] : node.type === 'heading' ? ['level'] : node.type === 'codeBlock' ? ['language', 'width'] : node.type === 'imageBlock' ? ['file', 'caption', 'alt', 'semantics', 'displaySize'] : []);
   const common = { id: attributes.id, metadata: attributes.metadata };
   if (node.text !== undefined) throw new Error('Text belongs to inline nodes');
   if (node.type === 'quizBlock') {
     if (node.content?.length) throw new Error('Quiz cannot contain editor nodes');
     return { ...common, kind: 'quiz', questions: attributes.questions };
   }
-  if (node.type === 'table') return { ...common, kind: 'table', rows: (node.content ?? []).map(inputRow => {
+  if (node.type === 'table') return { ...common, kind: 'table', ...(attributes.displaySize != null ? { displaySize: attributes.displaySize } : {}), rows: (node.content ?? []).map(inputRow => {
     const row = checkedNode(inputRow);
     if (row.type !== 'tableRow' || row.attrs) throw new Error('Invalid table row');
     return (row.content ?? []).map(inputCell => {
@@ -106,6 +107,7 @@ function decodeBlock(input: unknown): unknown {
   if (node.type === 'paragraph' || node.type === 'heading' || node.type === 'codeBlock') {
     return { ...common, kind: node.type === 'codeBlock' ? 'code' : node.type, text: textContent(node, node.type === 'codeBlock'),
       ...(node.type === 'heading' ? { level: attributes.level } : {}),
+      ...(node.type === 'codeBlock' && attributes.width != null ? { width: attributes.width } : {}),
       ...(node.type === 'codeBlock' ? (attributes.language ? { language: attributes.language } : {}) : decodeFormatting(node)) };
   }
   if (node.type === 'bulletList' || node.type === 'orderedList') {

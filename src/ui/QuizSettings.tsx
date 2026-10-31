@@ -7,7 +7,7 @@ export function QuizSettings({ initial, apply, close }: { initial?: QuizQuestion
   const [error, setError] = useState('');
   function change(index: number, patch: Partial<QuizQuestion>) { setQuestions(current => current.map((question, i) => i === index ? { ...question, ...patch } : question)); }
   return <DocumentDialog label="クイズ設定" close={close}><h2>選択クイズの設定</h2>
-    <p>各問題に選択肢と正解を1つ設定します。回答すると判定と解説を表示します。</p>
+    <p>各問題に選択肢と正解を設定します。複数選択では正解を複数指定できます。回答すると判定と解説を表示します。</p>
     <form onSubmit={event => {
       event.preventDefault();
       const result = quizQuestionsSchema.safeParse(questions);
@@ -16,13 +16,14 @@ export function QuizSettings({ initial, apply, close }: { initial?: QuizQuestion
     }}>
       {questions.map((question, index) => <fieldset className="quiz-settings-question" key={index}>
         <legend>問題 {index + 1}</legend>
+        <label>回答形式<select aria-label={`問題${index + 1}の回答形式`} value={question.multiple ? "multiple" : "single"} onChange={event => change(index, { multiple: event.target.value === "multiple", correctIndices: question.correctIndices ?? [question.correctIndex] })}><option value="single">単一選択（ラジオボタン）</option><option value="multiple">複数選択（チェックボックス）</option></select></label>
         <label>問題文<textarea aria-label={`問題${index + 1}の問題文`} required value={question.prompt} onChange={event => change(index, { prompt: event.target.value })} /></label>
         {question.options.map((option, optionIndex) => <label key={optionIndex}>選択肢 {optionIndex + 1}<input aria-label={`問題${index + 1}の選択肢${optionIndex + 1}`} required value={option} onChange={event => change(index, { options: question.options.map((text, i) => i === optionIndex ? event.target.value : text) })} /></label>)}
         <button type="button" disabled={question.options.length >= 10} onClick={() => change(index, { options: [...question.options, ''] })}>選択肢を追加</button>
-        <button type="button" disabled={question.options.length <= 2} onClick={() => change(index, { options: question.options.slice(0, -1), correctIndex: Math.min(question.correctIndex, question.options.length - 2) })}>最後の選択肢を削除</button>
-        <label>正解<select aria-label={`問題${index + 1}の正解`} value={question.correctIndex} onChange={event => change(index, { correctIndex: Number(event.target.value) })}>{question.options.map((_, i) => <option key={i} value={i}>選択肢 {i + 1}</option>)}</select></label>
+        <button className="danger" type="button" disabled={question.options.length <= 2} onClick={() => change(index, { options: question.options.slice(0, -1), correctIndex: Math.min(question.correctIndex, question.options.length - 2), ...(question.correctIndices ? { correctIndices: question.correctIndices.filter(i => i < question.options.length - 1) } : {}) })}>最後の選択肢を削除</button>
+        {question.multiple ? <fieldset><legend>正解（すべて選択）</legend>{question.options.map((_, i) => <label key={i}><input type="checkbox" checked={question.correctIndices?.includes(i) ?? false} onChange={event => change(index, { correctIndices: event.target.checked ? [...(question.correctIndices ?? []), i] : question.correctIndices?.filter(value => value !== i) ?? [] })} />選択肢 {i + 1}</label>)}</fieldset> : <label>正解<select aria-label={`問題${index + 1}の正解`} value={question.correctIndex} onChange={event => change(index, { correctIndex: Number(event.target.value) })}>{question.options.map((_, i) => <option key={i} value={i}>選択肢 {i + 1}</option>)}</select></label>}
         <label>解説<textarea aria-label={`問題${index + 1}の解説`} required value={question.explanation} onChange={event => change(index, { explanation: event.target.value })} /></label>
-        <button type="button" disabled={questions.length === 1} onClick={() => setQuestions(current => current.filter((_, i) => i !== index))}>問題 {index + 1} を削除</button>
+        <button className="danger" type="button" disabled={questions.length === 1} onClick={() => setQuestions(current => current.filter((_, i) => i !== index))}>問題 {index + 1} を削除</button>
       </fieldset>)}
       <button type="button" disabled={questions.length >= 100} onClick={() => setQuestions(current => [...current, emptyQuestion()])}>問題を追加</button>
       {error && <p role="alert">{error}</p>}

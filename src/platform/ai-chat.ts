@@ -1,5 +1,5 @@
 export interface AiConnection { connected: boolean; error?: string; models: { id: string; name: string; isDefault: boolean }[] }
-export type AiEvent = { type: 'delta'; text: string; itemId: string } | { type: 'done'; status: string; error?: string } | { type: 'error'; message: string };
+export type AiEvent = { type: 'delta'; text: string; itemId: string } | ({ type: 'reply' } & AiReply) | { type: 'done'; status: string; error?: string } | { type: 'error'; message: string };
 const headers = { 'X-DocSymbi-AI': '1', 'Content-Type': 'application/json' };
 export async function readAiConnection(signal?: AbortSignal): Promise<AiConnection> {
   const response = await fetch('/api/ai/status', { headers, ...(signal ? { signal } : {}) });
@@ -20,6 +20,7 @@ export async function streamAiChat(input: { conversationId: string; message: str
       for (const line of lines) {
         if (!line.trim()) continue;
         const event = JSON.parse(line) as AiEvent;
+        if (event.type === 'reply') aiReplySchema.parse({ message: event.message, action: event.action });
         if (event.type === 'done' || event.type === 'error') completed = true;
         receive(event);
       }
@@ -28,3 +29,4 @@ export async function streamAiChat(input: { conversationId: string; message: str
     if (!completed) throw new Error('応答の途中で接続が切れました。');
   } finally { reader.releaseLock(); }
 }
+import { aiReplySchema, type AiReply } from '../application/ai-document-actions';

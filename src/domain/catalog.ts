@@ -1,10 +1,10 @@
 import type { Document } from './schema';
 
-export const documentTypes = { document: 'ドキュメント', 'basic-design': '基本設計書', 'detailed-design': '詳細設計書', specification: '仕様書', article: '技術記事' };
+export const documentTypes = { document: 'ドキュメント', template: 'テンプレート' };
 export const documentStatuses = { draft: '下書き', review: 'レビュー中', published: '公開済み' };
 export function documentProperties(document: Document) {
   const value = document.metadata;
-  return { type: typeof value.type === 'string' ? value.type : 'document',
+  return { type: value.isTemplate === true || value.type === 'template' ? 'template' : 'document',
     status: typeof value.status === 'string' ? value.status : 'draft',
     tags: Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === 'string') : [] };
 }
@@ -22,7 +22,7 @@ export function bodyText(document: Document): string {
   return texts.join('\n');
 }
 export function summarize(document: Document, revision: number, folderPath = '') {
-  return { id: document.id, title: document.title, createdAt: document.createdAt, updatedAt: document.updatedAt, revision, folderPath, ...documentProperties(document), searchText: bodyText(document) };
+  return { id: document.id, title: document.title, createdAt: document.createdAt, updatedAt: document.updatedAt, revision, folderPath, ...documentProperties(document), isTemplate: documentProperties(document).type === 'template', searchText: bodyText(document) };
 }
 export function folderContains(parent: string, child: string, recursive = true): boolean {
   return child === parent || (recursive && (!parent || child.startsWith(`${parent}/`)));

@@ -1,9 +1,11 @@
+import type { AccessPolicy } from '../application/access-policy';
 import { SidebarResizeHandle } from './SidebarResizeHandle';
 import type { DocumentSummary } from '../application/ports/document-repository';
 import { creationEvents, type OpenCreationMenu } from './CreationMenu';
 import { Icon } from './Icon';
 import { useState, type ReactNode } from 'react';
-export function FolderNavigation({ folders, documents, open, selected, select, rootName, menu, synchronize, busy, width, resize, move }: {
+export function FolderNavigation({ folders, documents, open, selected, select, rootName, menu, synchronize, busy, width, resize, move, access }: {
+  access?: AccessPolicy | undefined;
   move?: ((id: string, path: string, revision: number) => void) | undefined;
   width: number; resize: (width: number) => void;
   synchronize: () => void; busy: boolean;
@@ -48,14 +50,14 @@ export function FolderNavigation({ folders, documents, open, selected, select, r
           <svg className="folder-chevron" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed.has(path) ? 'M8 5l5 5-5 5' : 'M5 8l5 5 5-5'} /></svg>
         </button>
         <button className="folder-select" title={path || rootName} aria-label={`▱ ${name}`} aria-expanded={!collapsed.has(path)} aria-current={selected === path ? 'page' : undefined} onClick={() => toggle(path)}>
-          <Icon name="folder" /><span>{name}</span>
+          <Icon name="folder" /><span>{name}</span>{access?.folderLocked(path) && <span title="ロック中" aria-hidden="true">🔒</span>}
         </button>
       </div>
       {!collapsed.has(path) && <>{childFolders.map(renderFolder)}{files.map(file => <div className="folder-row tree-file-row" key={file.id} {...creationEvents(menu, path, file.title, 'file', file.id)}>
         <button className="folder-select tree-document" draggable={!!move && !busy} onDragStart={event => {
           if (!move || busy) { event.preventDefault(); return; }
           event.dataTransfer.setData('application/x-docsymbi-document', file.id); event.dataTransfer.effectAllowed = 'move'; setDragged(file);
-        }} onDragEnd={() => { setDragged(null); setDropTarget(null); }} style={{ paddingLeft: 38 + (depth + 1) * 20 }} title={file.title} onClick={() => open(file.id)}><Icon name="file" /><span>{file.title}</span></button>
+        }} onDragEnd={() => { setDragged(null); setDropTarget(null); }} style={{ paddingLeft: 38 + (depth + 1) * 20 }} title={file.title} onClick={() => open(file.id)}><Icon name="file" /><span>{file.title}</span>{access?.documentLocked(file.id) && <span title="ロック中" aria-hidden="true">🔒</span>}</button>
       </div>)}</>}
     </div>;
   }

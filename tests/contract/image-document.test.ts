@@ -41,3 +41,13 @@ test('explicit file update keeps identity and rejects other documents and stale 
   await updateDocumentFromFile(serialize(document), repository, document.id, stored.revision);
   await expect(updateDocumentFromFile(serialize(document), repository, document.id, stored.revision)).rejects.toThrow();
 });
+
+test('images above the former 3 MiB cap survive export, import and editor conversion', () => {
+  const image = document.blocks.find(block => block.kind === 'image')!;
+  const bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><!--' + 'x'.repeat(4 * 1024 * 1024) + '--></svg>');
+  const large = { ...document, blocks: [{ ...image, file: { ...image.file, mimeType: 'image/svg+xml' as const, data: bytes.toString('base64'), byteLength: bytes.length, width: 1, height: 1 } }] };
+  const restored = deserialize(serialize(large));
+  expect(restored).toEqual(large);
+  expect(fromEditor(toEditor(restored), restored)).toEqual(large);
+  for (const data of ['A===', 'AAA', 'AA=A', '!!!!']) expect(() => deserialize(JSON.stringify({ ...large, blocks: [{ ...large.blocks[0], file: { ...large.blocks[0]!.file, data } }] }))).toThrow();
+});

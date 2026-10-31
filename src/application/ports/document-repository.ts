@@ -1,7 +1,7 @@
 import type { Document } from '../../domain/schema';
 
 export interface StoredDocument { document: Document; revision: number }
-export interface DocumentSummary { id: string; title: string; updatedAt: string; revision: number; createdAt?: string; folderPath?: string; type?: string; tags?: string[]; status?: string; searchText?: string }
+export interface DocumentSummary { id: string; title: string; updatedAt: string; revision: number; createdAt?: string; folderPath?: string; type?: string; tags?: string[]; status?: string; searchText?: string; isTemplate?: boolean }
 /** Revisions are positive integers; failures reject with RepositoryError.
  * list: updatedAt descending, then ID ascending. Writes resolve after durable commit.
  * Revisions are opaque positive comparison tokens, not necessarily counters.

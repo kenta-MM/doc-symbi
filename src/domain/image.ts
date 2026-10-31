@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { textSchema } from './text';
 
-export const imageByteLimit = 3 * 1024 * 1024;
 const strings = z.array(textSchema).max(500);
 export const imageSemanticsSchema = z.strictObject({
   version: z.literal(1), purpose: textSchema, summary: textSchema,
@@ -20,9 +19,9 @@ export const emptyImageSemantics = (): ImageSemantics => ({ version: 1, purpose:
 export const imageFileSchema = z.strictObject({
   id: z.uuid(), fileName: z.string().min(1).max(255),
   mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']),
-  byteLength: z.number().int().positive().max(imageByteLimit),
+  byteLength: z.number().int().positive(),
   width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000),
-  data: z.string().max(4 * Math.ceil(imageByteLimit / 3)).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  data: z.string().refine(data => data.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(data), '画像のBase64形式が不正です'),
 }).superRefine((file, context) => {
   const bytes = file.data.length * 3 / 4 - (file.data.endsWith('==') ? 2 : file.data.endsWith('=') ? 1 : 0);
   if (bytes !== file.byteLength) context.addIssue({ code: 'custom', message: '画像のバイト数が一致しません' });

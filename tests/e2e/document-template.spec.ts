@@ -1,0 +1,63 @@
+import { expect, test } from '../helpers/folder-page';
+
+test('save a personal template, reuse after reload, and keep the original independent', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('textbox', { name: '新しいドキュメント名' }).fill('ひな形の元文書');
+  await page.getByRole('combobox', { name: 'ドキュメント種類' }).selectOption('document');
+  await page.getByRole('button', { name: '作成して編集を開始' }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.locator('.tiptap').fill('目的と設計方針を記入してください');
+  await page.getByRole('button', { name: 'テンプレートとして保存', exact: true }).click();
+  await page.getByRole('textbox', { name: 'テンプレート名' }).fill('チームの設計ひな形');
+  await page.getByRole('button', { name: 'テンプレートを保存', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('combobox', { name: '使用するテンプレート' }).selectOption({ label: 'チームの設計ひな形' });
+  await expect(page.getByRole('combobox', { name: 'ドキュメント種類' })).toHaveValue('document');
+  await expect(page.locator('.template-card')).toContainText('目的と設計方針');
+  await page.getByRole('combobox', { name: 'ドキュメント種類' }).selectOption('template');
+  await expect(page.getByRole('combobox', { name: '使用するテンプレート' })).toBeDisabled();
+  await expect(page.getByRole('combobox', { name: '使用するテンプレート' })).toHaveValue('');
+  await page.getByRole('combobox', { name: 'ドキュメント種類' }).selectOption('document');
+  await expect(page.getByRole('combobox', { name: '使用するテンプレート' })).toBeEnabled();
+  await page.getByRole('combobox', { name: '使用するテンプレート' }).selectOption({ label: 'チームの設計ひな形' });
+
+  await page.getByRole('textbox', { name: '新しいドキュメント名' }).fill('新しい設計書');
+  await page.getByRole('button', { name: '作成して編集を開始' }).click();
+  await expect(page.locator('.tiptap')).toContainText('目的と設計方針を記入してください');
+  await page.locator('.tiptap').fill('個別案件の設計');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.tiptap')).toContainText('個別案件の設計');
+  await page.getByRole('navigation', { name: 'パンくずリスト' }).getByRole('button', { name: 'ドキュメント', exact: true }).click();
+  await page.locator('.catalog').getByRole('button', { name: 'チームの設計ひな形', exact: true }).dblclick();
+  await expect(page.locator('.tiptap')).toContainText('目的と設計方針を記入してください');
+  await expect(page.locator('.mode-label').filter({ hasText: /^テンプレート$/ })).toBeVisible();
+});
+
+test('create a template directly and reuse it as a document', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  const type = page.getByRole('combobox', { name: 'ドキュメント種類' });
+  await expect(type.locator('option')).toHaveText(['ドキュメント', 'テンプレート']);
+  await type.selectOption('template');
+  await expect(page.getByRole('combobox', { name: '使用するテンプレート' })).toBeDisabled();
+  await page.getByRole('textbox', { name: '新しいドキュメント名' }).fill('直接作ったひな形');
+  await page.getByRole('button', { name: '作成して編集を開始' }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.locator('.tiptap').fill('ひな形の本文');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存済み' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '新規作成', exact: true }).click();
+  await page.getByRole('combobox', { name: '使用するテンプレート' }).selectOption({ label: '直接作ったひな形' });
+  await expect(type).toHaveValue('document');
+  await page.getByRole('button', { name: '作成して編集を開始' }).click();
+  await expect(page.locator('.tiptap')).toContainText('ひな形の本文');
+  await expect(page.locator('.mode-label').filter({ hasText: /^テンプレート$/ })).toHaveCount(0);
+});

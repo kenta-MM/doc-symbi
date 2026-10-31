@@ -16,15 +16,18 @@ test.beforeEach(async ({ page }) => {
 
 test('headings 1–6, lists and fences convert only on their completion and Backspace restores literal input', async ({ page }) => {
   const body = page.locator('.tiptap');
-  for (const [marker, selector] of [['#', 'h1'], ['##', 'h2'], ['###', 'h3'], ['####', 'h4'], ['#####', 'h5'], ['######', 'h6'], ['-', 'ul'], ['1.', 'ol'], ['```', 'pre']]) {
+  for (const [marker, selector] of [['#', 'h1'], ['##', 'h2'], ['###', 'h3'], ['####', 'h4'], ['#####', 'h5'], ['######', 'h6'], ['-', 'ul'], ['1.', 'ol'], ['``', 'pre'], ['```', 'pre']]) {
     await body.press('Control+a'); await body.press('Backspace');
     await body.pressSequentially(marker!);
-    await expect(body.locator(':scope > p')).toHaveText(marker!);
-    await body.press(marker === '```' ? 'Enter' : 'Space');
+    if (marker === '```') await body.press('Enter');
+    else if (marker !== '``') {
+      await expect(body.locator(':scope > p')).toHaveText(marker!);
+      await body.press('Space');
+    }
     await expect(body.locator(selector!)).toHaveCount(1);
     await expect(body).toHaveText('');
     await body.press('Backspace');
-    const literal = marker + (marker === '```' ? '' : ' ');
+    const literal = marker + (marker!.startsWith('`') ? '' : ' ');
     await expect(body.locator(':scope > p')).toHaveText(literal, { useInnerText: false });
     await body.pressSequentially('literal');
     await expect(body.locator(':scope > p')).toHaveText(literal + 'literal');
@@ -43,7 +46,7 @@ test('heading Enter becomes a paragraph; code Enter and Mod-Enter retain existin
   await body.pressSequentially('本文');
   await expect(body.locator('h2')).toHaveText('見出し');
   await expect(body.locator(':scope > p')).toHaveText('本文');
-  await body.press('Enter'); await body.pressSequentially('```'); await body.press('Enter');
+  await body.press('Enter'); await body.pressSequentially('``');
   await body.pressSequentially('# code'); await body.press('Enter'); await body.pressSequentially('next');
   await expect(body.locator('pre')).toHaveText('# code\nnext');
   await body.press('Control+Enter'); await body.pressSequentially('通常');
@@ -99,12 +102,28 @@ test('slash menu filters both languages, cancels losslessly and inserts a table 
   await page.getByRole('button', { name: '挿入', exact: true }).click();
   await expect(body.locator(':scope > *')).toHaveCount(3);
   await expect(body.locator(':scope > p').first()).toHaveText('before');
-  await expect(body.locator(':scope > table')).toHaveCount(1);
+  await expect(body.locator('table')).toHaveCount(1);
   await expect(body.locator(':scope > p').last()).toHaveText('after');
   await body.press('Control+z'); await expect(body).toContainText('/表');
   await body.press('Control+y'); await expect(body.locator('table')).toHaveCount(1);
   await body.locator('th p').first().click(); await page.keyboard.type('# ');
   await expect(body.locator('h1')).toHaveCount(0);
+});
+
+test('slash code option supports clicking, filtering, immediate typing and undo', async ({ page }) => {
+  const body = page.locator('.tiptap');
+  await body.pressSequentially('/');
+  await page.getByRole('option', { name: 'コードブロック', exact: true }).click();
+  await expect(body.locator('pre')).toHaveText('');
+  await expect(page.getByRole('listbox', { name: '挿入メニュー' })).toHaveCount(0);
+  await page.keyboard.type('const value = 1;');
+  await expect(body.locator('pre')).toHaveText('const value = 1;');
+  await body.press('Control+z'); await body.press('Control+z');
+  await expect(body.locator(':scope > p')).toHaveText('/');
+  await body.press('Backspace'); await body.pressSequentially('/code'); await body.press('Enter');
+  await expect(body.locator('pre')).toHaveText('');
+  await body.press('Control+z');
+  await expect(body.locator(':scope > p')).toHaveText('/code');
 });
 
 test('quiz selection, cancellation, unknown commands and list restrictions', async ({ page }) => {

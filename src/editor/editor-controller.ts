@@ -14,10 +14,12 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { safeLink, languageSchema } from '../domain/rich-text';
 import { assignIdentity } from './identity';
 import { plainTextPaste } from './input';
-import { executeCommand } from './transaction-bridge';
+import { executeCommand, replaceDocumentBody } from './transaction-bridge';
 import { applyHeading } from './apply-heading';
 import { InputAssistance } from './input-assistance';
 import { ImageInput } from './image-input';
+import { cutLine } from './cut-line';
+import { copyTable, pasteTable } from './table-clipboard';
 
 function textElements(document: Document): { id: string; text: string; metadata: Metadata }[] {
   const result: { id: string; text: string; metadata: Metadata }[] = [];
@@ -39,18 +41,26 @@ export class EditorController implements EditorPort {
     this.assistance?.dispose(); this.imageInput?.dispose();
     this.editor?.destroy();
     let validated: { node: ProseMirrorNode; document: Document } | null = null;
-    const editor = new Editor({ element: this.host, extensions: [...editorNodes, editorHistory],
+    const editor: Editor = new Editor({ element: this.host, extensions: [...editorNodes, editorHistory],
       content: toEditor(document), enableInputRules: false, enablePasteRules: false,
       editorProps: { attributes: { role: 'textbox', 'aria-label': '文書本文', 'aria-multiline': 'true' },
         handleTextInput: (_view, from, to, text) => this.assistance?.text(from, to, text) ?? false,
         handlePaste: (view, event, slice) => {
           if (!editor.isEditable) return true;
           this.assistance?.interrupt();
-          return this.imageInput?.paste(event) || plainTextPaste(view, event, slice);
+          return pasteTable(editor, event, this.environment) || this.imageInput?.paste(event) || plainTextPaste(view, event, slice);
         },
         handleDrop: (_view, event) => { this.assistance?.interrupt(); return this.imageInput?.drop(event) ?? false; },
-        handleDOMEvents: { contextmenu: (view, event) => {
+        handleDOMEvents: { cut: cutLine, contextmenu: (view, event) => {
           if (!editor.isEditable) return false;
+          const cell = (event.target as HTMLElement).closest('td, th');
+          if (cell) {
+            const pos = view.posAtDOM(cell, 0);
+            view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos))));
+            event.preventDefault();
+            this.host.dispatchEvent(new CustomEvent('editor-context', { bubbles: true, detail: { x: event.clientX, y: event.clientY, table: true } }));
+            return true;
+          }
           const figure = (event.target as HTMLElement).closest('figure');
           if (figure) { const pos = view.posAtDOM(figure, 0); const resolved = view.state.doc.resolve(pos); const at = resolved.parent.type.name === 'imageBlock' ? resolved.before() : pos; view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at))); }
           if (!figure && view.state.selection.empty) return false;
@@ -102,6 +112,13 @@ export class EditorController implements EditorPort {
     const dispatch = editor.view.props.dispatchTransaction!;
     editor.view.setProps({ dispatchTransaction: transaction => {
       try {
+        // DOM deletion during composition probes the Backspace keymaps. Tiptap
+        // dispatches even when no command handled that probe. Updating the view
+        // with this unchanged tree overwrites the IME's pending DOM change and
+        // loses Chrome's composition range before the deletion is synchronized.
+        if (editor.view.composing && !transaction.docChanged && !transaction.selectionSet
+          && !transaction.storedMarksSet && !transaction.scrolledIntoView
+          && transaction.isGeneric) return;
         if (transaction.docChanged) {
           if (!editor.isEditable) return;
           // Tiptap's appended clearDocument transaction resets custom identity
@@ -156,6 +173,14 @@ export class EditorController implements EditorPort {
     if (!editor) return;
     focusHeading(editor, id);
   }
+  replaceBody(document: Document): void {
+    if (!this.editor?.isEditable) throw new Error('編集できる状態ではありません。');
+    if (document.id !== this.current().id) throw new Error('編集対象が異なります。');
+    this.assistance?.interrupt();
+    this.dispatchFailure = null;
+    replaceDocumentBody(this.editor, this.current(), document);
+    if (this.dispatchFailure) throw this.dispatchFailure;
+  }
   setEditable(editable: boolean): void {
     if (!editable) this.assistance?.interrupt();
     this.editor?.setEditable(editable, false);
@@ -191,6 +216,13 @@ export class EditorController implements EditorPort {
     this.editor.chain().focus().setMark('link', { href }).run();
     if (this.dispatchFailure) throw this.dispatchFailure;
   }
+  async copyTable(): Promise<void> {
+    if (!this.editor?.isEditable) return;
+    const context = this.cursorContext();
+    const table = this.current().blocks.find(block => block.id === context.blockId);
+    if (!context.inTable || table?.kind !== 'table') throw new Error('コピーする表を選択してください');
+    await copyTable(this.editor, table);
+  }
   applyAtCursor(action: CursorAction, value?: string): void {
     const editor = this.editor;
     if (!editor?.isEditable) return;
@@ -219,6 +251,7 @@ export class EditorController implements EditorPort {
     }
     if (action === 'heading') { if (!this.cursorContext().inTable) this.applyHeading(); return; }
     if (action === 'bold') { editor.chain().focus().toggleMark('bold').run(); return; }
+    if (action === 'inlineCode') { this.assistance?.interrupt(); editor.chain().focus().toggleMark('inlineCode').run(); return; }
     if (action === 'bullet' || action === 'ordered') {
       if (this.cursorContext().inTable) return;
       const { $from } = editor.state.selection;
@@ -241,6 +274,8 @@ export class EditorController implements EditorPort {
       if ((action === 'rowDelete' && block.rows.length === 1) || (action === 'columnDelete' && block.rows[0]!.length === 1)) {
         this.execute({ type: 'deleteBlock', id: block.id }, this.environment); editor.view.focus(); return;
       }
+      if (action === 'rowAdd' && block.rows.length >= 100) throw new Error('行は100行まで追加できます');
+      if (action === 'columnAdd' && block.rows[0]!.length >= 20) throw new Error('列は20列まで追加できます');
       const { $from } = editor.state.selection;
       const row = $from.index(1), column = $from.index(2);
       const cell = (header = false) => ({ id: this.environment.id(), metadata: {}, text: '', header });
@@ -250,7 +285,7 @@ export class EditorController implements EditorPort {
       if (action === 'columnDelete' && block.rows[0]!.length > 1) block.rows.forEach(cells => cells.splice(column, 1));
       const pos = $from.before(1), original = $from.node(1);
       const replacement = editor.schema.nodeFromJSON(encodeBlock(block));
-      const tr = editor.state.tr.replaceWith(pos, pos + original.nodeSize, replacement);
+      const tr = editor.state.tr.replaceWith(pos, pos + original.nodeSize, replacement).setMeta('docsymbi-command', true);
       const targetRow = Math.min(row, replacement.childCount - 1);
       const targetColumn = Math.min(column, replacement.child(targetRow).childCount - 1);
       let cellPos = pos + 1;

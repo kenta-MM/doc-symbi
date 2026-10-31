@@ -1,3 +1,4 @@
+import { LockedStorage } from './infrastructure/files/locked-storage';
 import { createRoot } from 'react-dom/client';
 import { IndexedDbRepository } from './infrastructure/indexeddb/document-repository';
 import { FileDocumentRepository } from './infrastructure/files/document-repository';
@@ -8,8 +9,8 @@ import './ui/styles.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element missing');
 const environment = { id: () => crypto.randomUUID(), clock: () => new Date().toISOString() };
-const storage = new FileDocumentRepository(new IndexedDbRepository());
-const session = new DocumentSession(storage, environment);
+const storage = new LockedStorage(new FileDocumentRepository(new IndexedDbRepository()));
+const session = new DocumentSession(storage, environment, storage.access);
 function createEditor(host: HTMLElement) {
   const controller = new EditorController(host, () => {
     if (!session.state.document) throw new Error('文書を開いてください');

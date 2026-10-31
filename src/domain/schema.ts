@@ -9,7 +9,7 @@ const identity = { id: z.uuid(), metadata: metadataSchema };
 const formatting = formattingSchema.optional();
 export const paragraphSchema = z.strictObject({ ...identity, kind: z.literal('paragraph'), text: textSchema, formatting });
 export const headingSchema = z.strictObject({ ...identity, kind: z.literal('heading'), text: textSchema, formatting, level: z.number().int().min(1).max(6) });
-export const codeSchema = z.strictObject({ ...identity, kind: z.literal('code'), text: textSchema, language: languageSchema.optional() });
+export const codeSchema = z.strictObject({ ...identity, kind: z.literal('code'), text: textSchema, language: languageSchema.optional(), width: z.number().int().min(120).max(20000).optional() });
 export const listSchema = z.strictObject({
   ...identity, kind: z.literal('list'), style: z.enum(['bullet', 'ordered']),
   get items(): z.ZodArray<z.ZodObject<{
@@ -25,7 +25,7 @@ export const imageSchema = z.strictObject({ ...identity, kind: z.literal('image'
 });
 export type ImageBlock = z.infer<typeof imageSchema>;
 export const tableCellSchema = z.strictObject({ ...identity, text: textSchema, formatting, header: z.boolean() });
-export const tableSchema = z.strictObject({ ...identity, kind: z.literal('table'), rows: z.array(z.array(tableCellSchema).min(1).max(20)).min(1).max(100) }).refine(table => table.rows.every(row => row.length === table.rows[0]!.length), '表の列数が一致しません');
+export const tableSchema = z.strictObject({ ...identity, kind: z.literal('table'), displaySize: z.strictObject({ width: z.number().int().positive().max(20000), height: z.number().int().positive().max(20000) }).optional(), rows: z.array(z.array(tableCellSchema).min(1).max(20)).min(1).max(100) }).refine(table => table.rows.every(row => row.length === table.rows[0]!.length), '表の列数が一致しません');
 export const quizSchema = z.strictObject({ ...identity, kind: z.literal('quiz'), questions: quizQuestionsSchema });
 export type QuizBlock = z.infer<typeof quizSchema>;
 export const blockSchema = z.discriminatedUnion('kind', [paragraphSchema, headingSchema, codeSchema, listSchema, imageSchema, tableSchema, quizSchema]);

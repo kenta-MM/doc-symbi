@@ -7,7 +7,7 @@ export class ValidationError extends Error {
     super(message); this.name = 'ValidationError';
   }
 }
-export const limits = { fileBytes: 10 * 1024 * 1024, textPoints: 1_000_000, elements: 10_000, listDepth: 32 } as const;
+export const limits = { fileBytes: 10 * 1024 * 1024, transferBytes: 256 * 1024 * 1024, textPoints: 1_000_000, elements: 10_000, listDepth: 32 } as const;
 
 function record(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 
@@ -50,6 +50,10 @@ export function validateDocument(input: unknown): Document {
   }
   const result = documentSchema.safeParse(input);
   if (!result.success) throw new ValidationError('InvalidStructure', result.error.issues[0]?.message ?? '不正な文書', result.error.issues[0]?.path.join('.') ?? '');
-  if (utf8Length(JSON.stringify(result.data)) > limits.fileBytes) throw new ValidationError('LimitExceeded', '文書は UTF-8 で 10 MiB 以内にしてください');
+  // Image bytes are separate files in folder storage. Keep the content and
+  // description budget independent of the number of attached image bytes.
+  const content = { ...result.data, blocks: result.data.blocks.map(block => block.kind === 'image'
+    ? { ...block, file: { ...block.file, data: undefined } } : block) };
+  if (utf8Length(JSON.stringify(content)) > limits.fileBytes) throw new ValidationError('LimitExceeded', '本文・説明情報は UTF-8 で 10 MiB 以内にしてください（画像本体を除く）');
   return result.data;
 }

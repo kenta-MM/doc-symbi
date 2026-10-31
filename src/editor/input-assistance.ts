@@ -6,8 +6,9 @@ import type { DocumentEnvironment } from '../domain/document';
 import { encodeBlock } from './adapter';
 import { closeHistory } from './history';
 import { automaticInputEnabled, saveAutomaticInput } from '../platform/input-preferences';
+import { InlineCodeInput } from './inline-code-input';
 
-const choices = [{ command: 'table', label: '表' }, { command: 'quiz', label: 'クイズ' }] as const;
+const choices = [{ command: 'table', label: '表' }, { command: 'quiz', label: 'クイズ' }, { command: 'code', label: 'コードブロック' }, { command: 'heading', label: '見出し' }] as const;
 type Choice = typeof choices[number];
 
 /** Only direct, contiguous input in a top-level paragraph starts a shortcut. */
@@ -19,10 +20,12 @@ export class InputAssistance {
   private pending: { id: string; node: PMNode } | null = null;
   private menu: HTMLDivElement | null = null;
   private selected = 0;
+  private fence: { doc: PMNode; position: number; third: boolean } | null = null;
   private matches: readonly Choice[] = [];
-  constructor(private editor: Editor, private host: HTMLElement, private environment: DocumentEnvironment) {}
-  setEnabled(value: boolean) { this.enabled = value; saveAutomaticInput(value); this.direct = null; this.conversion = null; }
-  interrupt() { this.direct = null; this.conversion = null; this.closeMenu(); }
+  private inlineCode: InlineCodeInput;
+  constructor(private editor: Editor, private host: HTMLElement, private environment: DocumentEnvironment) { this.inlineCode = new InlineCodeInput(editor); }
+  setEnabled(value: boolean) { this.enabled = value; saveAutomaticInput(value); this.direct = null; this.conversion = null; this.fence = null; this.inlineCode.clear(); }
+  interrupt() { this.direct = null; this.conversion = null; this.fence = null; this.inlineCode.clear(); this.closeMenu(); }
   dispose() { this.interrupt(); this.pending = null; }
   private paragraph() {
     const { selection } = this.editor.state;
@@ -30,10 +33,27 @@ export class InputAssistance {
   }
   text(from: number, to: number, text: string): boolean {
     if (!this.editor.isEditable || this.editor.view.composing) return false;
+    if (this.enabled && this.inlineCode.text(from, to, text)) { this.direct = null; this.conversion = null; this.fence = null; return true; }
+    // Code examples must keep block shortcuts literal. Process quote toggling
+    // above first so the user can still leave inline code with two quotes.
+    if (this.editor.isActive('inlineCode')) {
+      this.direct = null; this.conversion = null; this.fence = null; this.closeMenu();
+      return false;
+    }
+    // The second backtick already created the block. Accept a third backtick
+    // followed by Enter as the existing fence shortcut, without inserting it.
+    if (this.fence && !this.fence.third && this.fence.doc === this.editor.state.doc
+      && from === to && from === this.fence.position + 1 && text === '`' && this.conversion) {
+      this.fence.third = true;
+      this.conversion.original = this.conversion.original.type.create(this.conversion.original.attrs, this.editor.schema.text('```'));
+      this.conversion.offset = 3;
+      return true;
+    }
+    this.fence = null;
     // DOM input may arrive before ProseMirror has synchronized its selection.
     // The input callback's range is authoritative, not state.selection.
     const cursor = this.editor.state.doc.resolve(from);
-    if (cursor.depth !== 1 || cursor.parent.type.name !== 'paragraph' || from !== to) { this.direct = null; return false; }
+    if (cursor.depth !== 1 || !['paragraph', 'heading'].includes(cursor.parent.type.name) || from !== to) { this.direct = null; return false; }
     const continues = this.direct?.doc.eq(this.editor.state.doc) && this.direct.end === from;
     const starts = cursor.parentOffset === 0 && /^[#1`/-]$/.test(text);
     if (!continues && !starts) return false;
@@ -43,7 +63,12 @@ export class InputAssistance {
     const original = tr.doc.nodeAt(position)!;
     const prefix = original.textBetween(0, cursor.parentOffset + text.length);
     const marker = /^(#{1,6}|-|1\.) $/.exec(prefix);
-    if (this.enabled && marker) {
+    if (this.enabled && prefix === '``') {
+      this.convert(position, original, 2, '```');
+      if (original.content.size === 2) this.fence = { doc: this.editor.state.doc, position, third: false };
+      return true;
+    }
+    if (this.enabled && marker && (cursor.parent.type.name !== 'heading' || marker[1]!.startsWith('#'))) {
       this.convert(position, original, prefix.length, marker[1]!);
       return true;
     }
@@ -61,7 +86,10 @@ export class InputAssistance {
       const paragraph = schema.nodes.paragraph!.create(null, content);
       const item = schema.nodes.listItem!.create({ id: this.environment.id(), metadata: {} }, paragraph);
       replacement = schema.nodes[marker === '-' ? 'bulletList' : 'orderedList']!.create(original.attrs, item);
-    } else replacement = schema.nodes[marker === '```' ? 'codeBlock' : 'heading']!.create({ ...original.attrs, ...(marker === '```' ? { language: 'text' } : { level: marker.length }) }, content);
+    } else if (marker === '```') {
+      const text = original.textBetween(offset, original.content.size, '\n', '\n');
+      replacement = schema.nodes.codeBlock!.create({ ...original.attrs, language: 'text' }, text ? schema.text(text) : undefined);
+    } else replacement = schema.nodes.heading!.create({ ...original.attrs, level: marker.length }, content);
     const old = this.editor.state.doc.nodeAt(position)!;
     const tr = closeHistory(this.editor.state.tr).replaceWith(position, position + old.nodeSize, replacement);
     tr.setSelection(TextSelection.create(tr.doc, position + (marker === '-' || marker === '1.' ? 3 : 1)));
@@ -73,13 +101,23 @@ export class InputAssistance {
   }
   key(event: KeyboardEvent): boolean {
     if (!this.editor.isEditable || event.isComposing || event.keyCode === 229 || this.editor.view.composing) return false;
+    this.inlineCode.key(event);
+    if (this.fence && this.fence.doc === this.editor.state.doc && this.editor.state.selection.empty
+      && this.editor.state.selection.from === this.fence.position + 1) {
+      if (!this.fence.third && event.key === '`' && !event.ctrlKey && !event.metaKey && !event.altKey) return false;
+      if (this.fence.third && event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+        this.fence = null; return true;
+      }
+      if (event.key === 'Shift') return false;
+    }
+    this.fence = null;
     if (event.key === 'Escape' && this.slashId) { this.closeMenu(); return true; }
     if (this.slashId && this.matches.length && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         this.selected = (this.selected + (event.key === 'ArrowDown' ? 1 : -1) + this.matches.length) % this.matches.length;
         this.renderMenu(); return true;
       }
-      if (event.key === 'Enter') { this.choose(this.matches[this.selected]!); return true; }
+      if (event.key === 'Enter' || event.key === 'Tab') { this.choose(this.matches[this.selected]!); return true; }
     }
     const previous = this.conversion;
     if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.altKey && previous && previous.doc === this.editor.state.doc && this.editor.state.selection.empty && previous.cursor === this.editor.state.selection.from) {
@@ -129,6 +167,11 @@ export class InputAssistance {
     const cursor = this.paragraph(); if (!cursor) return;
     this.pending = { id: String(cursor.parent.attrs.id), node: cursor.parent };
     this.closeMenu();
+    if (choice.command === 'heading') { this.insert({ kind: 'heading', id: String(cursor.parent.attrs.id), metadata: {}, text: '', level: 1 }); return; }
+    if (choice.command === 'code') {
+      this.insert({ kind: 'code', id: String(cursor.parent.attrs.id), metadata: {}, text: '', language: 'text' });
+      return;
+    }
     this.host.dispatchEvent(new CustomEvent('editor-insert-request', { bubbles: true, detail: choice.command }));
   }
   cancel() { this.pending = null; this.closeMenu(); this.editor.view.focus(); }

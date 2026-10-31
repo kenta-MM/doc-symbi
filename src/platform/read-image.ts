@@ -1,7 +1,7 @@
-import { imageByteLimit, imageFileSchema } from '../domain/image';
+import { imageFileSchema } from '../domain/image';
 
 export async function readImage(file: File, id: string) {
-  if (!file.size || file.size > imageByteLimit) throw new Error('画像は 3 MiB 以内にしてください');
+  if (!file.size) throw new Error('空の画像ファイルは添付できません');
   const mimeType = file.type || (file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : '');
   if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(mimeType)) throw new Error('PNG・JPEG・WebP・SVG を選んでください');
   const dataUrl = await new Promise<string>((resolve, reject) => {

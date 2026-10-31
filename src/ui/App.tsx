@@ -1,3 +1,4 @@
+import { applyAppearance, loadAppearance, defaultShortcuts, keyBinding, type ShortcutAction } from '../platform/appearance-preferences';
 import type { CSSProperties } from 'react';
 import { SidebarResizeHandle } from './SidebarResizeHandle';
 import { registerOffline } from '../offline/register';
@@ -15,6 +16,8 @@ import { DocumentCatalog } from './DocumentCatalog';
 import { FolderNavigation } from './FolderNavigation';
 import { DocumentProperties } from './DocumentProperties';
 import { NewDocument } from './NewDocument';
+import { SaveTemplate } from './SaveTemplate';
+import { instantiateTemplate } from '../domain/document-template';
 import { DocumentDialog } from './DocumentDialogs';
 import { useUnsavedWarning } from './use-unsaved-warning';
 import { requiresNavigationGuard, resolveNavigation } from '../application/navigation-guard';
@@ -26,9 +29,11 @@ import { Icon } from './Icon';
 import { AiSettings } from './AiSettings';
 import { AiChatPanel } from './AiChatPanel';
 import { loadAiProviderId } from '../platform/ai-preferences';
+import { aiDocumentVersion, applyAiDocument } from '../application/apply-ai-document';
 
 export function App({ session, createEditor, storage }: { session: DocumentSession; createEditor: (host: HTMLElement) => EditorPort; storage?: FolderStorage }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  useEffect(() => { applyAppearance(); window.addEventListener('storage', applyAppearance); return () => window.removeEventListener('storage', applyAppearance); }, []);
   useEffect(() => registerOffline(() => {}).dispose, []);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [propertiesWidth, setPropertiesWidth] = useState(380);
@@ -46,6 +51,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [fileBusy, setFileBusy] = useState(false);
   const [folderTarget, setFolderTarget] = useState('');
   const [creating, setCreating] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [folders, setFolders] = useState<string[]>(['']);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -72,7 +78,10 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
   const [help, setHelp] = useState(false);
   const [aiSettings, setAiSettings] = useState(false);
   const previousDocumentId = useRef<string | null>(null);
-  const editable = !!state.document && editingId === state.document.id;
+  const [, refreshLocks] = useState(0);
+  useEffect(() => { const changed = () => { refreshLocks(value => value + 1); setEditingId(null); }; window.addEventListener('storage', changed); window.addEventListener('docsymbi-locks', changed); return () => { window.removeEventListener('storage', changed); window.removeEventListener('docsymbi-locks', changed); }; }, []);
+  const locked = !!state.document && !!session.access?.documentLocked(state.document.id);
+  const editable = !!state.document && editingId === state.document.id && !locked;
   useUnsavedWarning(requiresNavigationGuard(state));
   const connect = useCallback((value: EditorPort | null) => setEditor(value), []);
   const refresh = useCallback(async () => {
@@ -109,10 +118,26 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     return () => window.removeEventListener('editor-error', rejected);
   }, [report]);
   useEffect(() => {
-    const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); if (state.document) void save(); } };
-    window.addEventListener('keydown', key);
-    return () => { window.removeEventListener('keydown', key); };
-  }, [state.dirty, state.saveState, state.document, save]);
+    const key = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229 || (event.target as HTMLElement).closest('[role="dialog"]')) return;
+      const action = (Object.entries(loadAppearance().shortcuts) as [ShortcutAction, string][]).find(([, binding]) => binding === keyBinding(event))?.[0];
+      if (!state.document) return;
+      if (!action) {
+        const original = (Object.entries(defaultShortcuts) as [ShortcutAction, string][]).find(([, binding]) => binding === keyBinding(event))?.[0];
+        if (original && (original === 'save' || (editable && (event.target as HTMLElement).closest('.tiptap'))) && loadAppearance().shortcuts[original] !== defaultShortcuts[original]) { event.preventDefault(); event.stopImmediatePropagation(); }
+        return;
+      }
+      if (action !== 'save' && (!editable || !(event.target as HTMLElement).closest('.tiptap'))) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (action === 'save') { if (!locked) void save(); }
+      else if (action === 'undo') editor?.undo();
+      else if (action === 'redo') editor?.redo();
+      else if (action === 'bold') editor?.applyAtCursor?.('bold');
+      else editor?.applyHeading();
+    };
+    window.addEventListener('keydown', key, true);
+    return () => { window.removeEventListener('keydown', key, true); };
+  }, [state.dirty, state.saveState, state.document, save, editable, locked, editor]);
   function navigate(action: () => void | Promise<void>) {
     navigationRequest.current++;
     if (requiresNavigationGuard(session.state)) setPending(() => action);
@@ -177,6 +202,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
     setMenu(null);
     if (storageBusy || !storageReady) return;
     if (kind === 'folder' && (!storage?.name || !storage.createFolder)) { report(new Error('フォルダ作成には保存フォルダーを選択してください')); return; }
+    if (path !== null) { try { session.access?.assertFolder(path); } catch (error) { report(error); return; } }
     if (path === null) { setCreationFolder(selectedFolder); setDestinationChoice(kind); return; }
     if (kind === 'document') navigate(() => { session.close(); setCreationFolder(path); setCreating(true); });
     else { setFolderTarget(path); setFolderAction('create'); setFolderName(''); setFolderError(''); }
@@ -194,22 +220,24 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       <button onClick={() => navigate(() => { session.close(); setSelectedFolder(''); })}>ドキュメント</button>
       {(documents.find(row => row.id === state.document!.id)?.folderPath ?? '').split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button onClick={() => navigate(() => { session.close(); setSelectedFolder(parts.slice(0, index + 1).join('/')); })}>{part}</button></span>)}
       <span> / {title}</span>
-      <div className="document-actions"><button onClick={() => setSidePanel('properties')}>文書情報</button><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button><SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button className="danger" onClick={() => setDeleting(true)}>文書を削除</button>}</div>
+      <div className="document-actions">{documentProperties(state.document).type === 'template' && <span className="mode-label">テンプレート</span>}<button disabled={state.saveState === 'saving' || storageBusy || !storageReady} onClick={() => setSavingTemplate(true)}>テンプレートとして保存</button><button onClick={() => setSidePanel('properties')}>文書情報</button><span className="mode-label">{editable ? '編集モード' : 'ビューモード'}</span><button disabled={locked} onClick={() => setEditingId(editable ? null : state.document!.id)}>{editable ? '編集を終了' : '編集'}</button>{session.access && <button disabled={state.dirty || state.saveState === 'saving'} onClick={() => { try { session.access!.toggle('documents', state.document!.id); } catch (error) { report(error); } }}>{session.access.ownDocument(state.document.id) ? 'ロックを解除' : 'ロック'}</button>}{locked && <span role="status">ロック中（読み取り専用）</span>}<SaveStatus editable={editable} state={state} titleChanged={title !== state.document.title} save={() => void save()} />{editable && <button className="danger" onClick={() => setDeleting(true)}>文書を削除</button>}</div>
     </nav>}
     <div style={{ '--folder-width': `${sidebarWidth}px`, '--ai-panel-width': `${sidePanel === 'chat' ? chatWidth : propertiesWidth}px` } as CSSProperties} className={`workspace ai-workspace ${sidePanel ? 'has-ai-panel' : ''} ${state.document ? 'reading-workspace' : 'library-workspace'}`}>
       {state.document ? <aside className="document-sidebar outline-sidebar"><div className="outline-scroll"><Outline key={state.document.id} document={state.document} focus={id => editor?.focusHeading(id)} /></div><SidebarResizeHandle width={sidebarWidth} resize={setSidebarWidth} label="アウトラインの幅" /></aside> :
-      <FolderNavigation move={folder && session.repository.move ? (id, path, revision) => void moveDocument(id, path, revision) : undefined} width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
+      <FolderNavigation access={session.access} move={folder && session.repository.move ? (id, path, revision) => void moveDocument(id, path, revision) : undefined} width={sidebarWidth} resize={setSidebarWidth} synchronize={() => void synchronizeFolders()} busy={storageBusy || !storageReady} documents={documents} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} menu={setMenu} rootName={folder ?? (storage ? '保存先未設定' : 'ブラウザ内保存')} folders={folders} selected={selectedFolder} select={path => { setSelectedFolder(path); setCreating(false); }} />}
       <main className="document-main">
        {(error || state.error) && <div role="alert" className="error-banner">{error || state.error?.message}{storage && state.document && <button disabled={storageBusy || !storageReady} onClick={() => void synchronizeFolders()}>保存先に再接続</button>}{state.document && state.saveState === 'error' && <button onClick={() => void save()}>保存を再試行</button>}</div>}
       {creating && !folder && <p className="storage-warning">保存先フォルダが未設定のため、ドキュメントはブラウザ内に保存します。実ディレクトリに保存するには保存フォルダーを選択してください。</p>}
-      {creating ? <NewDocument key={creationFolder} folders={folders} folder={creationFolder} cancel={() => setCreating(false)} create={async values => {
+      {creating ? <NewDocument templates={documents.filter(document => document.isTemplate)} key={creationFolder} folders={folders} folder={creationFolder} cancel={() => setCreating(false)} create={async values => {
         if (storage?.name) await storage.folders?.();
-        session.create(values.title, values.folder);
-        session.accept({ ...session.state.document!, metadata: { ...session.state.document!.metadata, type: values.type, tags: values.tags, status: values.status } });
+        const template = values.type !== 'template' && values.templateId ? (await session.repository.get(values.templateId)).document : undefined;
+        if (template && documentProperties(template).type !== 'template') throw new Error('テンプレートが変更されています。一覧を再読み込みしてください');
+        session.create(values.title, values.folder, template);
+        session.accept({ ...session.state.document!, metadata: { ...session.state.document!.metadata, type: values.type, isTemplate: values.type === 'template', tags: values.tags, status: values.status } });
         setEditingId(session.state.document!.id); setCreating(false);
         try { await session.save(); await refresh(); setError(''); } catch (error) { report(error); }
       }} /> : !state.document ? <>
-        <DocumentCatalog selectedId={selectedDocumentId} select={setSelectedDocumentId} key={catalogVersion} menu={setMenu} rootName={folder ?? 'ブラウザ内保存'} documents={documents} folders={folders} folder={selectedFolder} selectFolder={setSelectedFolder} tagFilter={tagFilter} setTagFilter={setTagFilter} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} />
+        <DocumentCatalog access={session.access} selectedId={selectedDocumentId} select={setSelectedDocumentId} key={catalogVersion} menu={setMenu} rootName={folder ?? 'ブラウザ内保存'} documents={documents} folders={folders} folder={selectedFolder} selectFolder={setSelectedFolder} tagFilter={tagFilter} setTagFilter={setTagFilter} open={id => navigate(async () => { if (await session.load(id)) { setEditingId(null); setCreating(false); } })} />
       </> : <>
         <div className="editing-layout" style={{ '--properties-width': `${propertiesWidth}px` } as CSSProperties}><div className="document-canvas">
           {editable ? <div className="document-title document-heading"><input aria-label="文書名" title={title} value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { if (!editable) return; try { session.rename(title); } catch (error) { report(error); setTitle(state.document!.title); } }} /></div> : <h2 className="document-title">{title}</h2>}
@@ -220,11 +248,21 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
       </>}
     </main>
       <AiChatPanel open={sidePanel !== null} tab={sidePanel ?? 'chat'} selectTab={setSidePanel} close={() => setSidePanel(null)} width={sidePanel === 'chat' ? chatWidth : propertiesWidth} resize={sidePanel === 'chat' ? setChatWidth : setPropertiesWidth}
-        providerId={aiProvider} settings={() => setAiSettings(true)} documentTitle={state.document ? title : null} documentId={state.document?.id ?? null} documentContext={state.document ? JSON.stringify({ ...state.document, title }, (key, value) => key === 'file' ? undefined : value) : ''}
+        documentVersion={JSON.stringify([aiDocumentVersion(session), selectedFolder, folder])}
+        applyAction={(action, baseVersion) => {
+          if (storageBusy || !storageReady) throw new Error('保存先の準備が完了してから適用してください。');
+          if (baseVersion !== JSON.stringify([aiDocumentVersion(session), selectedFolder, folder])) throw new Error('依頼後に文書または保存先が変更されました。もう一度依頼してください。');
+          try { applyAiDocument(session, action, aiDocumentVersion(session), folders, editor); }
+          catch (error) { editor?.setEditable(editable); throw error; }
+          setEditingId(session.state.document!.id); setCreating(false); setError('');
+          if (action.type === 'create') setSelectedFolder(action.folderPath);
+          setNotice(action.type === 'create' ? 'AIの案から文書を作成しました。内容を確認し、「保存」で保存してください。' : 'AIの変更案を適用しました。内容を確認し、「保存」で保存してください。');
+        }}
+        providerId={aiProvider} settings={() => setAiSettings(true)} documentTitle={state.document ? title : null} documentId={state.document?.id ?? null} documentContext={JSON.stringify({ document: state.document ? { ...state.document, title } : null, folders, selectedFolder, rootName: folder ?? 'ブラウザ内保存' }, (key, value) => key === 'file' ? undefined : value)}
         draft={aiDrafts[JSON.stringify([state.document?.id ?? null, aiProvider])] ?? ''}
         changeDraft={value => setAiDrafts(previous => ({ ...previous, [JSON.stringify([state.document?.id ?? null, aiProvider])]: value }))}>
         {state.document ? <DocumentProperties document={state.document} folder={documents.find(row => row.id === state.document!.id)?.folderPath ?? selectedFolder} editable={editable} change={values => {
-          try { const current = session.state.document!; session.accept({ ...current, metadata: { ...current.metadata, ...values }, updatedAt: session.environment.clock() }); } catch (error) { report(error); }
+          try { const current = session.state.document!; session.accept({ ...current, metadata: { ...current.metadata, ...values, ...(values.type ? { isTemplate: values.type === 'template' } : {}) }, updatedAt: session.environment.clock() }); } catch (error) { report(error); }
         }} /> : selectedDocument ? <DocumentProperties document={selectedDocument} folder={selectedDocument.folderPath ?? ''} editable={false} change={() => {}} /> : <p className="ai-empty-properties">一覧で文書を選択すると、文書情報を確認できます。</p>}
       </AiChatPanel>
     </div>
@@ -249,7 +287,7 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
           setFolderAction(null);
         })().catch(error => setFolderError(error instanceof Error ? error.message : '操作できません')).finally(() => setFolderBusy(false));
       }}>実行</button></DocumentDialog>}
-    {menu && <CreationMenu target={menu} root={folder ?? 'ブラウザ内保存'} close={closeMenu} choose={kind => beginCreation(kind, menu.folder)} manage={action => {
+    {menu && <CreationMenu locked={menu.kind === 'file' ? session.access?.ownDocument(menu.id ?? '') : session.access?.ownFolder(menu.folder ?? '')} toggleLock={() => { try { if (state.dirty || state.saveState === 'saving') throw new Error('変更を保存してからロックしてください'); session.access?.toggle(menu.kind === 'file' ? 'documents' : 'folders', menu.kind === 'file' ? menu.id! : menu.folder ?? ''); setMenu(null); } catch (error) { report(error); } }} target={menu} root={folder ?? 'ブラウザ内保存'} close={closeMenu} choose={kind => beginCreation(kind, menu.folder)} manage={action => {
       const target = menu; setMenu(null);
       if (target.kind === 'file') {
         const file = documents.find(item => item.id === target.id);
@@ -295,6 +333,16 @@ export function App({ session, createEditor, storage }: { session: DocumentSessi
         const action = pending; setPending(null); await action();
       }).catch(report); }}>保存して移動</button>
     </DocumentDialog>}
+    {savingTemplate && state.document && <SaveTemplate title={title} close={() => setSavingTemplate(false)} save={async name => {
+      const source = session.state.document;
+      if (!source) throw new Error('文書を開いてください');
+      const template = instantiateTemplate(source, name, session.environment);
+      template.metadata.isTemplate = true; template.metadata.type = 'template';
+      const path = documents.find(document => document.id === source.id)?.folderPath ?? creationFolder;
+      await session.repository.create(template, path);
+      setNotice('テンプレートを保存しました。新規作成で選択できます。');
+      await refresh().catch(report);
+    }} />}
     {deleting && state.document && <DocumentDialog label="文書の削除"><h2>「{state.document.title}」を削除しますか？</h2><p>{state.document.id}</p><p>{storage ? '保存先の記事ファイルと未保存の変更を削除します。この操作は元に戻せません。' : '未保存の変更も削除されます。'}</p><button onClick={() => setDeleting(false)}>キャンセル</button><button className="danger" onClick={() => {
 
       void deleteCurrentDocument(session).then(() => { setDeleting(false); return refresh(); }).catch(report);

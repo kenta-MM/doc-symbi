@@ -46,3 +46,11 @@
 @media(max-width:700px){.app-shell>.app-header{height:auto;min-height:42px;flex-wrap:wrap;flex-shrink:0;padding:8px 12px}.app-header .tagline{display:none}.app-shell .ai-workspace,.app-shell .ai-workspace.has-ai-panel{position:relative;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(60px,20%) minmax(0,1fr)}.app-shell .ai-workspace .ai-side-panel{position:absolute;inset:0 0 0 auto;width:min(100%,400px);z-index:15;box-shadow:-8px 0 28px #233b351a}.ai-side-panel>.sidebar-resize-handle{display:none}.app-shell .ai-workspace .editing-layout{grid-template-rows:minmax(0,1fr)}}
 
 .modal-backdrop:has(.app-settings-dialog){z-index:20}
+.ai-document-proposal{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;white-space:normal}
+.ai-document-proposal summary{cursor:pointer;color:var(--green);margin:8px 0}
+.ai-document-proposal button{width:100%;font-size:12px}
+.ai-proposed-block{white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid var(--line);padding:8px 0}
+.ai-proposed-block p{margin:0;color:inherit}
+.ai-proposed-block pre{white-space:pre-wrap;font-size:12px}
+.ai-proposed-block ul,.ai-proposed-block ol{padding-left:20px;margin:0}
+.ai-proposed-table{overflow:auto}.ai-proposed-table table{border-collapse:collapse;font-size:12px}.ai-proposed-table td{border:1px solid var(--line);padding:5px}

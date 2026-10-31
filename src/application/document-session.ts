@@ -1,9 +1,11 @@
+import type { AccessPolicy } from './access-policy';
 import { createDocument, renameDocument, type DocumentEnvironment } from '../domain/document';
 import type { Document } from '../domain/schema';
 import { equivalent } from '../domain/equivalence';
 import { validateDocument } from '../domain/validate';
 import type { DocumentRepository } from './ports/document-repository';
 import { RepositoryError } from './errors';
+import { instantiateTemplate } from '../domain/document-template';
 
 export interface SessionState {
   document: Document | null; baseRevision: number | null; savedSnapshot: Document | null;
@@ -17,7 +19,7 @@ export class DocumentSession {
   private pending = 0;
   private loadRequest = 0;
   private creationFolder = '';
-  constructor(readonly repository: DocumentRepository, readonly environment: DocumentEnvironment) {}
+  constructor(readonly repository: DocumentRepository, readonly environment: DocumentEnvironment, readonly access?: AccessPolicy) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.state;
   isCurrent(state: SessionState): boolean {
@@ -27,11 +29,13 @@ export class DocumentSession {
     this.state = { ...this.state, ...change };
     for (const listener of this.listeners) listener();
   }
-  create(title: string, folderPath = ''): void {
+  create(title: string, folderPath = '', template?: Document): void {
+    this.access?.assertFolder(folderPath);
     if (this.pending) throw new Error('保存の完了を待ってください');
+    const document = template ? instantiateTemplate(template, title, this.environment) : createDocument(title, this.environment);
     this.loadRequest++;
     this.creationFolder = folderPath;
-    this.update({ document: createDocument(title, this.environment), baseRevision: null, savedSnapshot: null, generation: 0, loadVersion: this.state.loadVersion + 1, draftTitle: null, dirty: true, saveState: 'unsaved', error: null });
+    this.update({ document, baseRevision: null, savedSnapshot: null, generation: 0, loadVersion: this.state.loadVersion + 1, draftTitle: null, dirty: true, saveState: 'unsaved', error: null });
   }
   close(): void {
     if (this.pending) throw new Error('保存の完了を待ってください');
@@ -51,6 +55,7 @@ export class DocumentSession {
     return true;
   }
   accept(document: Document): void {
+    this.access?.assertDocument(document.id);
     const valid = validateDocument(document);
     if (!this.state.document || valid.id !== this.state.document.id) throw new Error('編集対象が異なります');
     const dirty = !equivalent(valid, this.state.savedSnapshot) || (this.state.draftTitle !== null && this.state.draftTitle !== valid.title);
@@ -58,12 +63,14 @@ export class DocumentSession {
       saveState: this.pending ? 'saving' : dirty ? 'unsaved' : 'saved' });
   }
   rename(title: string): void {
+    if (this.state.document) this.access?.assertDocument(this.state.document.id);
     if (!this.state.document) throw new Error('文書を開いてください');
     const document = renameDocument(this.state.document, title, this.environment.clock);
     this.update({ draftTitle: null });
     this.accept(document);
   }
   setTitleDraft(title: string): void {
+    if (this.state.document) this.access?.assertDocument(this.state.document.id);
     if (!this.state.document) return;
     const draftTitle = title === this.state.document.title ? null : title;
     const dirty = draftTitle !== null || !equivalent(this.state.document, this.state.savedSnapshot);
